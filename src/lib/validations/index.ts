@@ -66,10 +66,7 @@ export const parcelSchema = z.object({
     .string()
     .min(10, "A valid phone number is required.")
     .max(15),
-  weight_kg: z.coerce
-    .number()
-    .min(0.1, "Weight must be at least 0.1 kg.")
-    .max(1000),
+  weight_kg: z.number().min(0.1, "Weight must be at least 0.1 kg.").max(1000),
   notes: z.string().optional(),
   assigned_driver_id: z.string().uuid().optional(),
   assigned_vehicle_id: z.string().uuid().optional(),

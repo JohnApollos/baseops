@@ -13,12 +13,14 @@ export default function DispatchLayout({
 }) {
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar (desktop: visible, mobile: hamburger) */}
       <DispatchSidebar />
 
       {/* Main content area */}
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6 animate-fade-in">{children}</div>
+        {/* Mobile top bar spacer */}
+        <div className="md:hidden h-14" />
+        <div className="p-4 md:p-6 animate-fade-in">{children}</div>
       </main>
     </div>
   );

@@ -15,7 +15,8 @@ export default function OwnerLayout({
     <div className="flex h-screen overflow-hidden">
       <OwnerSidebar />
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6 animate-fade-in">{children}</div>
+        <div className="md:hidden h-14" />
+        <div className="p-4 md:p-6 animate-fade-in">{children}</div>
       </main>
     </div>
   );

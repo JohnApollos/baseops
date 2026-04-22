@@ -69,11 +69,11 @@ function updateState(partial: Partial<SyncState>) {
 }
 
 /** Subscribe to sync state changes. Returns an unsubscribe function. */
-export function subscribeSyncState(listener: SyncStateListener) {
+export function subscribeSyncState(listener: SyncStateListener): () => void {
   listeners.add(listener);
   // Immediately emit the current state
   listener({ ...currentState });
-  return () => listeners.delete(listener);
+  return () => { listeners.delete(listener); };
 }
 
 /** Get the current sync state snapshot. */
