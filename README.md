@@ -213,12 +213,22 @@ The sync indicator shows: 🟢 Online · 🟡 Syncing · 🔴 Offline (X pending
 
 Parcels automatically receive tracking codes in the format `BOP-YYYY-XXXXX` via a database trigger, ensuring uniqueness per organization per year.
 
+## Dashboard Preview
+
+BaseOps features a premium, high-density dark aesthetic designed for operational clarity.
+
+- **Dispatcher Command Center:** Stats bar, real-time map, and Kanban parcel board.
+- **Driver Mobile App:** Offline-first task management with background sync.
+- **Validation Pipeline:** Robust multi-step forms with strict Zod enforcement.
+
+---
+
 ## Roadmap
 
 - [x] **Phase 1** — Foundation (Auth, RBAC, Schema, Middleware)
-- [ ] **Phase 2** — Onboarding + Layout Shells
-- [ ] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
-- [ ] **Phase 4** — Driver Interface + Offline Sync
+- [x] **Phase 2** — Onboarding + Layout Shells
+- [x] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
+- [x] **Phase 4** — Driver Interface + Offline Sync
 - [ ] **Phase 5** — Owner Analytics + Team Management
 - [ ] **Phase 6** — Polish + Deployment
 
