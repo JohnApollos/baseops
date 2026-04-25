@@ -43,10 +43,23 @@ export default function NewParcelPage() {
     register,
     handleSubmit,
     watch,
+    trigger,
     formState: { errors },
   } = useForm<ParcelFormData>({
     resolver: zodResolver(parcelSchema),
   });
+
+  async function handleNext(nextStep: number) {
+    const fields: (keyof ParcelFormData)[][] = [
+      ["sender_name", "sender_address"],
+      ["recipient_name", "recipient_address", "recipient_phone"],
+      ["weight_kg", "notes"],
+    ];
+
+    const stepFields = fields[step - 1];
+    const isValid = await trigger(stepFields);
+    if (isValid) setStep(nextStep);
+  }
 
   async function onSubmit(data: ParcelFormData) {
     setIsLoading(true);
@@ -139,7 +152,7 @@ export default function NewParcelPage() {
               </div>
             </CardContent>
             <CardFooter className="justify-end">
-              <Button type="button" onClick={() => setStep(2)}>
+              <Button type="button" onClick={() => handleNext(2)}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardFooter>
@@ -205,7 +218,7 @@ export default function NewParcelPage() {
               >
                 <ArrowLeft className="mr-2 h-4 w-4" /> Back
               </Button>
-              <Button type="button" onClick={() => setStep(3)}>
+              <Button type="button" onClick={() => handleNext(3)}>
                 Next <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </CardFooter>
