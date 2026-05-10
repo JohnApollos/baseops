@@ -229,7 +229,7 @@ BaseOps features a premium, high-density dark aesthetic designed for operational
 - [x] **Phase 2** — Onboarding + Layout Shells
 - [x] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
 - [x] **Phase 4** — Driver Interface + Offline Sync
-- [ ] **Phase 5** — Owner Analytics + Team Management
+- [x] **Phase 5** — Owner Analytics + Team Management
 - [ ] **Phase 6** — Polish + Deployment
 
 ## License
