@@ -218,8 +218,10 @@ Parcels automatically receive tracking codes in the format `BOP-YYYY-XXXXX` via 
 BaseOps features a premium, high-density dark aesthetic designed for operational clarity.
 
 - **Dispatcher Command Center:** Stats bar, real-time map, and Kanban parcel board.
-- **Driver Mobile App:** Offline-first task management with background sync.
+- **Owner Analytics:** Recharts-powered data visualization for delivery volume and fleet performance.
+- **Driver Mobile App:** Offline-first task management with background sync (IndexedDB).
 - **Validation Pipeline:** Robust multi-step forms with strict Zod enforcement.
+- **RBAC Middleware:** Secure Next.js route protection with Supabase Row Level Security.
 
 ---
 
@@ -230,7 +232,7 @@ BaseOps features a premium, high-density dark aesthetic designed for operational
 - [x] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
 - [x] **Phase 4** — Driver Interface + Offline Sync
 - [x] **Phase 5** — Owner Analytics + Team Management
-- [ ] **Phase 6** — Polish + Deployment
+- [x] **Phase 6** — Polish + Deployment
 
 ## License
 

@@ -52,7 +52,6 @@ export function InviteMemberDialog() {
     setIsLoading(true);
     // In production, this would call our /api/invite-team endpoint
     // which uses Resend to send the invitation email.
-    console.log("Inviting member:", data);
     
     // Simulate API call
     await new Promise((resolve) => setTimeout(resolve, 1500));
