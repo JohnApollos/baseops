@@ -30,7 +30,7 @@ export default function LandingPage() {
   const apollosDigitalUrl = "https://apollos-digital.vercel.app";
 
   return (
-    <div className="min-h-screen bg-background relative overflow-x-hidden selection:bg-primary selection:text-primary-foreground">
+    <div className="dark min-h-screen bg-background relative overflow-x-hidden selection:bg-primary selection:text-primary-foreground">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] pointer-events-none -z-10 overflow-hidden">
         <div className="absolute top-[-10%] left-[10%] w-[350px] sm:w-[500px] h-[350px] sm:h-[500px] bg-primary/10 rounded-full blur-[80px] sm:blur-[120px]" />
