@@ -1,7 +1,7 @@
 // ============================================================
-// BaseOps — RBAC Middleware
+// BaseOps — RBAC Proxy
 // ============================================================
-// This middleware intercepts EVERY request and performs four
+// This proxy intercepts EVERY request and performs four
 // operations in sequence:
 //
 // 1. Refreshes the Supabase session (updates JWT cookies).
@@ -44,9 +44,9 @@ const ROUTE_ROLE_MAP: Record<string, UserRole[]> = {
 /** The super-admin email — platform-level management access. */
 const SUPER_ADMIN_EMAIL = process.env.SUPER_ADMIN_EMAIL ?? "";
 
-// ----- Middleware logic -----
+// ----- Proxy logic -----
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 1. Skip public routes and static assets

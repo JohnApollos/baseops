@@ -29,7 +29,7 @@ graph TB
         DEXIE[(Dexie / IndexedDB)]
     end
 
-    subgraph Middleware["Next.js Middleware"]
+    subgraph Proxy["Next.js Proxy"]
         MW[RBAC Guard]
         MW -->|verify session| SB_AUTH
         MW -->|check role| SB_DB
@@ -114,7 +114,7 @@ baseops/
 │   │   └── utils.ts          ← Tailwind merge utility
 │   ├── types/
 │   │   └── index.ts          ← All TypeScript interfaces
-│   └── middleware.ts          ← RBAC route guard
+│   └── proxy.ts               ← RBAC route guard (Next.js 16 Proxy)
 ├── supabase/
 │   ├── migrations/           ← Schema + RLS policies
 │   └── seed.sql              ← Demo data (Nairobi logistics)
@@ -189,9 +189,9 @@ CREATE POLICY "org_members_can_read_parcels" ON public.parcels
   );
 ```
 
-### RBAC Middleware
+### RBAC Proxy (Next.js 16)
 
-The middleware intercepts every request and performs four operations:
+The proxy intercepts every request and performs four operations:
 1. Refreshes the Supabase session
 2. Reads the user's role from their profile
 3. Redirects to the correct dashboard if accessing the wrong route group
@@ -221,13 +221,13 @@ BaseOps features a premium, high-density dark aesthetic designed for operational
 - **Owner Analytics:** Recharts-powered data visualization for delivery volume and fleet performance.
 - **Driver Mobile App:** Offline-first task management with background sync (IndexedDB).
 - **Validation Pipeline:** Robust multi-step forms with strict Zod enforcement.
-- **RBAC Middleware:** Secure Next.js route protection with Supabase Row Level Security.
+- **RBAC Proxy:** Secure Next.js route protection with Supabase Row Level Security.
 
 ---
 
 ## Roadmap
 
-- [x] **Phase 1** — Foundation (Auth, RBAC, Schema, Middleware)
+- [x] **Phase 1** — Foundation (Auth, RBAC, Schema, Proxy)
 - [x] **Phase 2** — Onboarding + Layout Shells
 - [x] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
 - [x] **Phase 4** — Driver Interface + Offline Sync

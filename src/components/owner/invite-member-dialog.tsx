@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Plus, Mail } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 const inviteSchema = z.object({
   email: z.string().email("Please enter a valid email address."),
@@ -50,16 +51,65 @@ export function InviteMemberDialog() {
 
   async function onSubmit(data: InviteFormData) {
     setIsLoading(true);
-    // In production, this would call our /api/invite-team endpoint
-    // which uses Resend to send the invitation email.
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    
-    toast.success(`Invitation sent to ${data.email}`);
-    setIsLoading(false);
-    setOpen(false);
-    reset();
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      let orgId = "org1";
+      let orgName = "QuickShip Logistics";
+      let inviterName = "Owner";
+
+      if (user) {
+        // Fetch inviter's organization details
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("org_id, full_name, organizations(name)")
+          .eq("id", user.id)
+          .single();
+
+        if (profile) {
+          orgId = profile.org_id || orgId;
+          inviterName = profile.full_name || inviterName;
+          if (profile.organizations) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            orgName = (profile.organizations as any).name || orgName;
+          }
+        }
+      }
+
+      const response = await fetch("/api/invite-team", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: data.email,
+          role: data.role,
+          full_name: "", // Unset until the user completes signup
+          org_id: orgId,
+          org_name: orgName,
+          inviter_name: inviterName,
+        }),
+      });
+
+      const body = await response.json();
+
+      if (!response.ok) {
+        throw new Error(body.error || "Failed to send team invitation.");
+      }
+
+      toast.success(`Invitation sent to ${data.email}`);
+      setOpen(false);
+      reset();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "An unexpected error occurred.";
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (

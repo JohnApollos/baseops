@@ -31,7 +31,7 @@ export default function LandingPage() {
             <span className="text-xl font-bold tracking-tight">BaseOps</span>
           </div>
           <div className="flex items-center gap-3">
-            <Link href="https://github.com" target="_blank">
+            <Link href="https://github.com" target="_blank" className="hidden sm:inline-flex">
               <Button variant="ghost" size="sm">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 GitHub

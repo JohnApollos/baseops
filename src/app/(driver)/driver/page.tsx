@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
 import { ParcelStatusBadge } from "@/components/dispatch/parcel-status-badge";
 import { enqueueSync } from "@/lib/sync-engine";
 import { db } from "@/lib/db";
+import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import type { Parcel, ParcelStatus } from "@/types";
 import {
@@ -13,21 +15,18 @@ import {
   MapPin,
   Package,
   Clock,
+  RefreshCw,
 } from "lucide-react";
 
 // ============================================================
 // Driver Dashboard — mobile-first parcel cards with offline
 // status update buttons.
 //
-// When a driver taps "Delivered" or "Failed":
-// 1. The parcel status is updated in Dexie (instant UI update)
-// 2. A sync queue entry is created
-// 3. When online, the sync engine pushes to Supabase
-//
-// This is the core offline-first demonstration.
+// 1. Reactively binds to Dexie (IndexedDB) as single source of truth.
+// 2. On mount, seeds mock data if local DB is empty.
+// 3. Fetches assigned parcels from Supabase when online.
 // ============================================================
 
-// Demo data — mirrors seed but from the driver's perspective
 const initialParcels: Parcel[] = [
   {
     id: "p1",
@@ -83,9 +82,63 @@ const initialParcels: Parcel[] = [
 ];
 
 export default function DriverDashboardPage() {
-  const [parcels, setParcels] = useState<Parcel[]>(initialParcels);
+  const [isPulling, setIsPulling] = useState(false);
 
-  // Count by status for the summary
+  // Bind UI directly to Dexie. Resolves as empty array during loading
+  const parcels = useLiveQuery(() => db.parcels.toArray()) ?? [];
+
+  // Seeding and Sync Effect
+  useEffect(() => {
+    async function seedAndSync() {
+      // 1. Seed IndexedDB with initial mock data if empty (gives instantly usable UI)
+      const count = await db.parcels.count();
+      if (count === 0) {
+        await db.parcels.bulkAdd(initialParcels);
+      }
+
+      // 2. Fetch latest data from Supabase if online and session is valid
+      await pullFromSupabase();
+    }
+    seedAndSync();
+  }, []);
+
+  async function pullFromSupabase() {
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    setIsPulling(true);
+
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        setIsPulling(false);
+        return;
+      }
+
+      // Query database for driver's assigned parcels
+      const { data: remoteParcels, error } = await supabase
+        .from("parcels")
+        .select("*")
+        .eq("assigned_driver_id", user.id);
+
+      if (error) throw error;
+
+      if (remoteParcels && remoteParcels.length > 0) {
+        // Clear old records and save current ones
+        await db.parcels.clear();
+        await db.parcels.bulkPut(remoteParcels);
+        toast.success("Synced tasks with server");
+      }
+    } catch (e: unknown) {
+      console.warn("Could not sync with Supabase (normal if using mock auth):", e);
+    } finally {
+      setIsPulling(false);
+    }
+  }
+
+  // Count by status
   const inTransit = parcels.filter((p) => p.status === "in_transit").length;
   const assigned = parcels.filter((p) => p.status === "assigned").length;
   const completed = parcels.filter(
@@ -94,58 +147,45 @@ export default function DriverDashboardPage() {
 
   /**
    * Handle status update — the core offline-first mutation.
-   * 1. Update local state (instant UI feedback)
-   * 2. Update Dexie (persist locally)
-   * 3. Enqueue sync (push to Supabase when online)
+   * 1. Update Dexie locally (triggers useLiveQuery for instant visual feedback)
+   * 2. Enqueue sync task (pushes to Supabase whenever online)
    */
   async function handleStatusUpdate(parcelId: string, newStatus: ParcelStatus) {
-    // 1. Optimistic UI update
-    setParcels((prev) =>
-      prev.map((p) =>
-        p.id === parcelId
-          ? {
-              ...p,
-              status: newStatus,
-              delivered_at:
-                newStatus === "delivered" ? new Date().toISOString() : p.delivered_at,
-            }
-          : p
-      )
-    );
+    const targetParcel = parcels.find((p) => p.id === parcelId);
+    if (!targetParcel) return;
 
-    // 2. Update Dexie locally
+    const deliveredAt = newStatus === "delivered" ? new Date().toISOString() : null;
+
+    // 1. Update Dexie locally
     try {
-      await db.parcels.put({
-        ...parcels.find((p) => p.id === parcelId)!,
+      await db.parcels.update(parcelId, {
         status: newStatus,
-        delivered_at:
-          newStatus === "delivered" ? new Date().toISOString() : null,
+        delivered_at: deliveredAt,
       });
-    } catch {
-      // Dexie might not have the parcel yet; that's okay
+    } catch (err) {
+      console.error("Dexie local update error:", err);
     }
 
-    // 3. Enqueue sync — this is the magic
+    // 2. Enqueue sync
     await enqueueSync("parcels", "update", {
       id: parcelId,
       status: newStatus,
-      delivered_at:
-        newStatus === "delivered" ? new Date().toISOString() : null,
+      delivered_at: deliveredAt,
     });
 
-    // 4. Also create a delivery event
+    // 3. Create delivery audit event
     const eventId = `evt-${Date.now()}`;
     await enqueueSync("delivery_events", "insert", {
       id: eventId,
       parcel_id: parcelId,
-      org_id: "org1",
-      driver_id: "d1",
+      org_id: targetParcel.org_id,
+      driver_id: targetParcel.assigned_driver_id || "d1",
       event_type: newStatus === "delivered" ? "delivered" : "failed",
       notes:
         newStatus === "delivered"
           ? "Delivered successfully"
           : "Delivery failed — recipient unavailable",
-      coords: [-1.2921, 36.8219], // Would use GPS in production
+      coords: [-1.2921, 36.8219], // Standard GPS fallback
       created_at: new Date().toISOString(),
     });
 
@@ -161,7 +201,7 @@ export default function DriverDashboardPage() {
     );
   }
 
-  // Separate active from completed
+  // Filter lists
   const activeParcels = parcels.filter(
     (p) => p.status === "in_transit" || p.status === "assigned"
   );
@@ -172,24 +212,34 @@ export default function DriverDashboardPage() {
   return (
     <div className="space-y-5">
       {/* Summary */}
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">
-          Today&apos;s Deliveries
-        </h1>
-        <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            {assigned} assigned
-          </span>
-          <span className="flex items-center gap-1">
-            <Package className="h-3.5 w-3.5 text-warning" />
-            {inTransit} in transit
-          </span>
-          <span className="flex items-center gap-1">
-            <CheckCircle2 className="h-3.5 w-3.5 text-success" />
-            {completed} done
-          </span>
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight">
+            Today&apos;s Deliveries
+          </h1>
+          <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Clock className="h-3.5 w-3.5" />
+              {assigned} assigned
+            </span>
+            <span className="flex items-center gap-1">
+              <Package className="h-3.5 w-3.5 text-warning" />
+              {inTransit} in transit
+            </span>
+            <span className="flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5 text-success" />
+              {completed} done
+            </span>
+          </div>
         </div>
+        <button
+          onClick={pullFromSupabase}
+          disabled={isPulling}
+          className="p-2 rounded-lg border bg-card text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          title="Refresh assignments"
+        >
+          <RefreshCw className={`h-4 w-4 ${isPulling ? "animate-spin" : ""}`} />
+        </button>
       </div>
 
       {/* Active parcels */}
@@ -240,7 +290,7 @@ export default function DriverDashboardPage() {
                 <span className="font-code">{parcel.weight_kg} kg</span>
               </div>
 
-              {/* Action buttons — THE OFFLINE MUTATION TRIGGERS */}
+              {/* Action buttons */}
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => handleStatusUpdate(parcel.id, "delivered")}

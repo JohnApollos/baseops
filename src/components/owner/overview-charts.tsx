@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -41,6 +42,12 @@ const fleetData = [
 ];
 
 export function DeliveryVolumeChart() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <Card className="col-span-1 lg:col-span-2 bg-card">
       <CardHeader>
@@ -48,24 +55,28 @@ export function DeliveryVolumeChart() {
         <CardDescription>Parcels processed over the last 7 days.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={volumeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorParcels" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
-                itemStyle={{ color: "var(--color-foreground)" }}
-              />
-              <Area type="monotone" dataKey="parcels" stroke="var(--color-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorParcels)" />
-            </AreaChart>
-          </ResponsiveContainer>
+        <div className="h-[300px] w-full flex items-center justify-center">
+          {!mounted ? (
+            <div className="h-full w-full bg-muted/10 animate-pulse rounded-lg" />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <AreaChart data={volumeData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorParcels" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="var(--color-primary)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="var(--color-primary)" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
+                  itemStyle={{ color: "var(--color-foreground)" }}
+                />
+                <Area type="monotone" dataKey="parcels" stroke="var(--color-primary)" strokeWidth={2} fillOpacity={1} fill="url(#colorParcels)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -73,6 +84,12 @@ export function DeliveryVolumeChart() {
 }
 
 export function StatusDistributionPie() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <Card className="bg-card">
       <CardHeader>
@@ -81,28 +98,32 @@ export function StatusDistributionPie() {
       </CardHeader>
       <CardContent>
         <div className="h-[300px] w-full flex items-center justify-center">
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={statusData}
-                cx="50%"
-                cy="50%"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={5}
-                dataKey="value"
-                stroke="none"
-              >
-                {statusData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.color} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
-                itemStyle={{ color: "var(--color-foreground)" }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
+          {!mounted ? (
+            <div className="w-[180px] h-[180px] rounded-full border border-dashed border-muted/30 animate-spin" />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <PieChart>
+                <Pie
+                  data={statusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={5}
+                  dataKey="value"
+                  stroke="none"
+                >
+                  {statusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
+                  itemStyle={{ color: "var(--color-foreground)" }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </div>
         <div className="flex flex-wrap justify-center gap-4 mt-2">
           {statusData.map((item) => (
@@ -118,6 +139,12 @@ export function StatusDistributionPie() {
 }
 
 export function FleetPerformanceBar() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   return (
     <Card className="col-span-1 lg:col-span-3 bg-card">
       <CardHeader>
@@ -125,19 +152,23 @@ export function FleetPerformanceBar() {
         <CardDescription>Deliveries completed by each vehicle today.</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[250px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={fleetData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-              <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                cursor={{ fill: "var(--color-muted)", opacity: 0.2 }}
-                contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
-                itemStyle={{ color: "var(--color-foreground)" }}
-              />
-              <Bar dataKey="deliveries" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+        <div className="h-[250px] w-full flex items-center justify-center">
+          {!mounted ? (
+            <div className="h-full w-full bg-muted/10 animate-pulse rounded-lg" />
+          ) : (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart data={fleetData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis dataKey="name" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                <Tooltip
+                  cursor={{ fill: "var(--color-muted)", opacity: 0.2 }}
+                  contentStyle={{ backgroundColor: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: "8px" }}
+                  itemStyle={{ color: "var(--color-foreground)" }}
+                />
+                <Bar dataKey="deliveries" fill="var(--color-primary)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </CardContent>
     </Card>
