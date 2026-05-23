@@ -30,7 +30,7 @@ export default function LandingPage() {
   const apollosDigitalUrl = "https://apollos-digital.vercel.app";
 
   return (
-    <div className="dark min-h-screen bg-background relative overflow-x-hidden selection:bg-primary selection:text-primary-foreground">
+    <div className="dark min-h-screen bg-background text-foreground relative overflow-x-hidden selection:bg-primary selection:text-primary-foreground">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] pointer-events-none -z-10 overflow-hidden">
         <div className="absolute top-[-10%] left-[10%] w-[350px] sm:w-[500px] h-[350px] sm:h-[500px] bg-primary/10 rounded-full blur-[80px] sm:blur-[120px]" />
@@ -45,7 +45,7 @@ export default function LandingPage() {
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary to-orange-600 flex items-center justify-center shadow-md shadow-primary/20 group-hover:scale-105 transition-transform duration-300">
               <Package className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">
+            <span className="text-xl font-bold tracking-tight text-foreground">
               BaseOps
             </span>
           </Link>
