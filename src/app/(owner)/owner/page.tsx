@@ -1,30 +1,117 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { DeliveryVolumeChart, StatusDistributionPie, FleetPerformanceBar } from "@/components/owner/overview-charts";
-import { Package, TrendingUp, Truck } from "lucide-react";
+import { Package, TrendingUp, Truck, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function OwnerDashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalVolume: 0,
+    successRate: 0,
+    activeFleetCount: 0,
+    totalFleetCount: 0,
+  });
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch user's organization context
+        const { data: profile, error: profileErr } = await supabase
+          .from("profiles")
+          .select("org_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileErr || !profile?.org_id) {
+          toast.error("Failed to load organization context.");
+          setLoading(false);
+          return;
+        }
+
+        // Query total parcels count
+        const { count: totalParcels } = await supabase
+          .from("parcels")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", profile.org_id);
+
+        // Query delivered parcels count
+        const { count: deliveredParcels } = await supabase
+          .from("parcels")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", profile.org_id)
+          .eq("status", "delivered");
+
+        // Query vehicles count
+        const { data: vehicles } = await supabase
+          .from("vehicles")
+          .select("status")
+          .eq("org_id", profile.org_id);
+
+        const totalVolume = totalParcels || 0;
+        const successRate = totalVolume > 0 ? ((deliveredParcels || 0) / totalVolume) * 100 : 100;
+        const activeFleetCount = vehicles ? vehicles.filter((v) => v.status === "on_route").length : 0;
+        const totalFleetCount = vehicles ? vehicles.length : 0;
+
+        setStats({
+          totalVolume,
+          successRate,
+          activeFleetCount,
+          totalFleetCount,
+        });
+      } catch (err: any) {
+        console.warn("Failed to query live dashboard stats, showing fallbacks.", err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadStats();
+  }, [supabase]);
+
+  if (loading) {
+    return (
+      <div className="flex h-[75vh] flex-col items-center justify-center gap-2">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground font-light">Loading organization statistics...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Organization Overview</h1>
-        <p className="text-muted-foreground">High-level metrics and performance analytics.</p>
+        <p className="text-muted-foreground text-sm font-light">
+          High-level metrics and performance analytics.
+        </p>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border bg-card p-4 space-y-2">
+        {/* Total Volume */}
+        <div className="rounded-xl border bg-card/65 backdrop-blur-sm p-5 space-y-2 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Package className="h-4 w-4" />
-            <span className="text-sm font-medium">Total Volume (30d)</span>
+            <Package className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">Total Volume (All Time)</span>
           </div>
-          <p className="text-3xl font-bold">4,289</p>
-          <p className="text-xs text-success flex items-center gap-1">
-            <TrendingUp className="h-3 w-3" /> +12% from last month
+          <p className="text-3xl font-bold">{stats.totalVolume.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground flex items-center gap-1">
+            Registered parcels in database
           </p>
         </div>
-        <div className="rounded-xl border bg-card p-4 space-y-2">
+
+        {/* Success Rate */}
+        <div className="rounded-xl border bg-card/65 backdrop-blur-sm p-5 space-y-2 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
             <svg
-              className="h-4 w-4"
+              className="h-4 w-4 text-success"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -34,18 +121,24 @@ export default function OwnerDashboardPage() {
             </svg>
             <span className="text-sm font-medium">Success Rate</span>
           </div>
-          <p className="text-3xl font-bold">98.2%</p>
-          <p className="text-xs text-success flex items-center gap-1">
-            <TrendingUp className="h-3 w-3" /> +0.5% from last month
+          <p className="text-3xl font-bold">
+            {stats.successRate.toFixed(1)}%
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Ratio of delivered parcels to total
           </p>
         </div>
-        <div className="rounded-xl border bg-card p-4 space-y-2">
+
+        {/* Active Fleet */}
+        <div className="rounded-xl border bg-card/65 backdrop-blur-sm p-5 space-y-2 shadow-sm">
           <div className="flex items-center gap-2 text-muted-foreground">
-            <Truck className="h-4 w-4" />
+            <Truck className="h-4 w-4 text-warning" />
             <span className="text-sm font-medium">Active Fleet</span>
           </div>
-          <p className="text-3xl font-bold">12 / 15</p>
-          <p className="text-xs text-muted-foreground">Vehicles on route today</p>
+          <p className="text-3xl font-bold">
+            {stats.activeFleetCount} / {stats.totalFleetCount}
+          </p>
+          <p className="text-xs text-muted-foreground">Vehicles currently on route</p>
         </div>
       </div>
 

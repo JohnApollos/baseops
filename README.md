@@ -160,10 +160,12 @@ Run the migration in your Supabase SQL Editor or via the CLI:
 npx supabase db push
 ```
 
-Then seed the demo data:
+Then seed the demo data and create auth users cleanly:
 
 ```bash
-# Copy-paste supabase/seed.sql into the SQL Editor
+# 1. Copy-paste supabase/seed.sql into the SQL Editor
+# 2. Run the API-based user seeding script to create test accounts and align operational data:
+node scripts/seed-users.js
 ```
 
 ### 4. Run Locally

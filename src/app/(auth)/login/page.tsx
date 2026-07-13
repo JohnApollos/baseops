@@ -37,7 +37,7 @@ export default function LoginPage() {
     setIsLoading(true);
     const supabase = createClient();
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email: data.email,
       password: data.password,
     });
@@ -49,7 +49,40 @@ export default function LoginPage() {
     }
 
     toast.success("Welcome back!");
-    router.refresh();
+
+    try {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, org_id, onboarded_at")
+        .eq("id", authData.user.id)
+        .single();
+
+      if (!profile) {
+        router.push("/onboarding");
+        router.refresh();
+        return;
+      }
+
+      const role = profile.role;
+      const isOnboarded = !!profile.org_id && !!profile.onboarded_at;
+
+      if (!isOnboarded) {
+        router.push("/onboarding");
+      } else if (role === "owner") {
+        router.push("/owner");
+      } else if (role === "dispatcher") {
+        router.push("/dispatch");
+      } else if (role === "driver") {
+        router.push("/driver");
+      } else {
+        router.push("/dispatch");
+      }
+      
+      router.refresh();
+    } catch (err) {
+      router.push("/dispatch");
+      router.refresh();
+    }
   }
 
   return (

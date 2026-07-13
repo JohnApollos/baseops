@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   Table,
   TableBody,
@@ -10,32 +12,65 @@ import {
 } from "@/components/ui/table";
 import { ParcelStatusBadge } from "@/components/dispatch/parcel-status-badge";
 import { Button } from "@/components/ui/button";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Loader2, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import type { ParcelStatus } from "@/types";
+import { toast } from "sonner";
+import type { Parcel } from "@/types";
 
-// ============================================================
-// Parcels List — table view of all parcels in the organization.
-// ============================================================
-
-const demoParcels = [
-  { id: "1", tracking_code: "BOP-2025-00001", sender: "Jumia Kenya", recipient: "Peter Kamau", address: "Kilimani, Nairobi", weight: 2.5, status: "in_transit" as ParcelStatus, driver: "James Ochieng" },
-  { id: "2", tracking_code: "BOP-2025-00002", sender: "Amazon KE", recipient: "Grace Muthoni", address: "Karen, Nairobi", weight: 1.0, status: "assigned" as ParcelStatus, driver: "Mary Akinyi" },
-  { id: "3", tracking_code: "BOP-2025-00003", sender: "Masoko", recipient: "John Otieno", address: "Langata, Nairobi", weight: 5.0, status: "received" as ParcelStatus, driver: "—" },
-  { id: "4", tracking_code: "BOP-2025-00004", sender: "Glovo", recipient: "Ann Wairimu", address: "South B, Nairobi", weight: 0.5, status: "delivered" as ParcelStatus, driver: "James Ochieng" },
-  { id: "5", tracking_code: "BOP-2025-00005", sender: "Sky Garden", recipient: "David Mwangi", address: "Embakasi, Nairobi", weight: 3.2, status: "failed" as ParcelStatus, driver: "Mary Akinyi" },
-  { id: "6", tracking_code: "BOP-2025-00006", sender: "Shopify KE", recipient: "Lucy Njeri", address: "Roysambu, Nairobi", weight: 1.8, status: "in_transit" as ParcelStatus, driver: "James Ochieng" },
-  { id: "7", tracking_code: "BOP-2025-00007", sender: "Copia", recipient: "Moses Kipchoge", address: "Kasarani, Nairobi", weight: 4.0, status: "received" as ParcelStatus, driver: "—" },
-];
+interface ParcelWithDriver extends Parcel {
+  driver: { full_name: string } | null;
+}
 
 export default function ParcelsListPage() {
+  const [parcels, setParcels] = useState<ParcelWithDriver[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function loadParcels() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // Fetch user's organization
+        const { data: profile, error: profileErr } = await supabase
+          .from("profiles")
+          .select("org_id")
+          .eq("id", user.id)
+          .single();
+
+        if (profileErr || !profile?.org_id) {
+          toast.error("Failed to load organization context.");
+          setLoading(false);
+          return;
+        }
+
+        // Fetch parcels and join with driver profile
+        const { data: parcelsData, error: parcelsErr } = await supabase
+          .from("parcels")
+          .select("*, driver:profiles(full_name)")
+          .eq("org_id", profile.org_id)
+          .order("created_at", { ascending: false });
+
+        if (parcelsErr) throw parcelsErr;
+        setParcels((parcelsData as any) || []);
+      } catch (err: any) {
+        toast.error("Error loading parcels: " + err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadParcels();
+  }, []);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">All Parcels</h1>
           <p className="text-muted-foreground">
-            {demoParcels.length} parcels in your organization.
+            {loading ? "Loading..." : `${parcels.length} parcels in your organization.`}
           </p>
         </div>
         <Link href="/dispatch/parcels/new">
@@ -46,7 +81,7 @@ export default function ParcelsListPage() {
         </Link>
       </div>
 
-      <div className="rounded-xl border">
+      <div className="rounded-xl border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
@@ -60,29 +95,50 @@ export default function ParcelsListPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {demoParcels.map((parcel) => (
-              <TableRow key={parcel.id} className="cursor-pointer hover:bg-muted/50">
-                <TableCell className="font-code text-primary text-sm">
-                  {parcel.tracking_code}
-                </TableCell>
-                <TableCell className="text-sm">{parcel.sender}</TableCell>
-                <TableCell className="text-sm font-medium">
-                  {parcel.recipient}
-                </TableCell>
-                <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                  {parcel.address}
-                </TableCell>
-                <TableCell className="hidden sm:table-cell text-sm font-code">
-                  {parcel.weight} kg
-                </TableCell>
-                <TableCell>
-                  <ParcelStatusBadge status={parcel.status} />
-                </TableCell>
-                <TableCell className="hidden lg:table-cell text-sm">
-                  {parcel.driver}
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span>Loading parcel list...</span>
+                  </div>
                 </TableCell>
               </TableRow>
-            ))}
+            ) : parcels.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                  <div className="flex flex-col items-center gap-2 py-4">
+                    <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="font-medium text-base">No parcels registered</p>
+                    <p className="text-sm">Click &quot;New Parcel&quot; to register your first delivery item.</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : (
+              parcels.map((parcel) => (
+                <TableRow key={parcel.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableCell className="font-code text-primary text-sm font-semibold">
+                    {parcel.tracking_code}
+                  </TableCell>
+                  <TableCell className="text-sm">{parcel.sender_name}</TableCell>
+                  <TableCell className="text-sm font-medium">
+                    {parcel.recipient_name}
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                    {parcel.recipient_address}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell text-sm font-code">
+                    {parcel.weight_kg} kg
+                  </TableCell>
+                  <TableCell>
+                    <ParcelStatusBadge status={parcel.status} />
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell text-sm">
+                    {parcel.driver?.full_name || <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

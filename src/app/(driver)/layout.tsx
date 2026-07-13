@@ -4,6 +4,8 @@ import { OfflineBanner } from "@/components/driver/offline-indicator";
 import { OfflineIndicator } from "@/components/driver/offline-indicator";
 import { Package } from "lucide-react";
 
+import { DriverSignOutButton } from "@/components/driver/sign-out-button";
+
 export const metadata: Metadata = {
   title: "Driver Dashboard",
   description: "Your assigned deliveries for today.",
@@ -36,8 +38,12 @@ export default function DriverLayout({
                 Driver
               </span>
             </div>
-            {/* Sync indicator */}
-            <OfflineIndicator />
+            
+            {/* Sync indicator & Sign Out */}
+            <div className="flex items-center gap-3">
+              <OfflineIndicator />
+              <DriverSignOutButton />
+            </div>
           </div>
         </header>
 

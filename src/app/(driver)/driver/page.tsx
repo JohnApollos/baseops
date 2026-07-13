@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ParcelStatusBadge } from "@/components/dispatch/parcel-status-badge";
-import { enqueueSync } from "@/lib/sync-engine";
+import { enqueueSync, initSyncEngine } from "@/lib/sync-engine";
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -83,6 +83,7 @@ const initialParcels: Parcel[] = [
 
 export default function DriverDashboardPage() {
   const [isPulling, setIsPulling] = useState(false);
+  const [activeTab, setActiveTab] = useState<"active" | "history">("active");
 
   // Bind UI directly to Dexie. Resolves as empty array during loading
   const parcels = useLiveQuery(() => db.parcels.toArray()) ?? [];
@@ -90,13 +91,20 @@ export default function DriverDashboardPage() {
   // Seeding and Sync Effect
   useEffect(() => {
     async function seedAndSync() {
-      // 1. Seed IndexedDB with initial mock data if empty (gives instantly usable UI)
+      // 1. Initialize Sync Engine
+      try {
+        await initSyncEngine();
+      } catch (err) {
+        console.warn("Failed to initialize offline sync engine:", err);
+      }
+
+      // 2. Seed IndexedDB with initial mock data if empty (gives instantly usable UI)
       const count = await db.parcels.count();
       if (count === 0) {
         await db.parcels.bulkAdd(initialParcels);
       }
 
-      // 2. Fetch latest data from Supabase if online and session is valid
+      // 3. Fetch latest data from Supabase if online and session is valid
       await pullFromSupabase();
     }
     seedAndSync();
@@ -125,12 +133,12 @@ export default function DriverDashboardPage() {
 
       if (error) throw error;
 
+      // Clear old mock records and save current ones (even if empty)
+      await db.parcels.clear();
       if (remoteParcels && remoteParcels.length > 0) {
-        // Clear old records and save current ones
-        await db.parcels.clear();
         await db.parcels.bulkPut(remoteParcels);
-        toast.success("Synced tasks with server");
       }
+      toast.success("Synced tasks with server");
     } catch (e: unknown) {
       console.warn("Could not sync with Supabase (normal if using mock auth):", e);
     } finally {
@@ -211,7 +219,7 @@ export default function DriverDashboardPage() {
 
   return (
     <div className="space-y-5">
-      {/* Summary */}
+      {/* Summary Header */}
       <div className="flex justify-between items-start">
         <div>
           <h1 className="text-xl font-bold tracking-tight">
@@ -242,108 +250,147 @@ export default function DriverDashboardPage() {
         </button>
       </div>
 
-      {/* Active parcels */}
-      {activeParcels.length > 0 && (
-        <div className="space-y-3">
-          {activeParcels.map((parcel, i) => (
-            <div
-              key={parcel.id}
-              className="rounded-xl border bg-card p-4 space-y-3 animate-slide-in"
-              style={{ animationDelay: `${i * 60}ms` }}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <span className="font-code text-sm text-primary">
-                  {parcel.tracking_code}
-                </span>
-                <ParcelStatusBadge status={parcel.status} />
-              </div>
+      {/* Segmented Tabs Navigation */}
+      <div className="grid grid-cols-2 p-1 rounded-lg bg-muted border bg-card/30 backdrop-blur-sm">
+        <button
+          type="button"
+          onClick={() => setActiveTab("active")}
+          className={`py-2 text-xs sm:text-sm font-semibold rounded-md transition-all ${
+            activeTab === "active"
+              ? "bg-card text-primary shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Active Tasks ({activeParcels.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("history")}
+          className={`py-2 text-xs sm:text-sm font-semibold rounded-md transition-all ${
+            activeTab === "history"
+              ? "bg-card text-primary shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Delivery History ({completedParcels.length})
+        </button>
+      </div>
 
-              {/* Recipient info */}
-              <div className="space-y-1">
-                <p className="font-medium">{parcel.recipient_name}</p>
-                <div className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                  <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <span>{parcel.recipient_address}</span>
+      {/* ACTIVE TASKS TAB */}
+      {activeTab === "active" && (
+        <div className="space-y-3">
+          {activeParcels.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground border rounded-xl bg-card/20 shadow-inner">
+              <Package className="h-10 w-10 mx-auto mb-3 opacity-30 text-primary" />
+              <p className="text-base font-semibold text-foreground">No active tasks</p>
+              <p className="text-xs mt-1">Enjoy your break! Refresh when ready for new tasks.</p>
+            </div>
+          ) : (
+            activeParcels.map((parcel, i) => (
+              <div
+                key={parcel.id}
+                className="rounded-xl border bg-card p-4 space-y-3 animate-slide-in"
+                style={{ animationDelay: `${i * 60}ms` }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <span className="font-code text-sm text-primary font-semibold">
+                    {parcel.tracking_code}
+                  </span>
+                  <ParcelStatusBadge status={parcel.status} />
                 </div>
-                <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Phone className="h-3.5 w-3.5 shrink-0" />
-                  <a
-                    href={`tel:${parcel.recipient_phone}`}
-                    className="hover:text-primary transition-colors"
+
+                {/* Recipient info */}
+                <div className="space-y-1">
+                  <p className="font-medium text-sm sm:text-base">{parcel.recipient_name}</p>
+                  <div className="flex items-start gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+                    <span>{parcel.recipient_address}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm text-muted-foreground">
+                    <Phone className="h-3.5 w-3.5 shrink-0 text-primary" />
+                    <a
+                      href={`tel:${parcel.recipient_phone}`}
+                      className="hover:text-primary transition-colors font-code"
+                    >
+                      {parcel.recipient_phone}
+                    </a>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {parcel.notes && (
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 border border-border/30">
+                    📝 {parcel.notes}
+                  </p>
+                )}
+
+                {/* Weight + sender */}
+                <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-2">
+                  <span>From: {parcel.sender_name}</span>
+                  <span className="font-code">{parcel.weight_kg} kg</span>
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    onClick={() => handleStatusUpdate(parcel.id, "delivered")}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs sm:text-sm px-3 py-2.5 rounded-lg bg-success/15 text-success font-semibold hover:bg-success/25 active:bg-success/35 transition-colors border border-success/20"
                   >
-                    {parcel.recipient_phone}
-                  </a>
+                    <CheckCircle2 className="h-4 w-4" />
+                    Delivered
+                  </button>
+                  <button
+                    onClick={() => handleStatusUpdate(parcel.id, "failed")}
+                    className="flex-1 flex items-center justify-center gap-1.5 text-xs sm:text-sm px-3 py-2.5 rounded-lg bg-destructive/15 text-destructive font-semibold hover:bg-destructive/25 active:bg-destructive/35 transition-colors border border-destructive/20"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Failed
+                  </button>
                 </div>
               </div>
-
-              {/* Notes */}
-              {parcel.notes && (
-                <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
-                  📝 {parcel.notes}
-                </p>
-              )}
-
-              {/* Weight + sender */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>From: {parcel.sender_name}</span>
-                <span className="font-code">{parcel.weight_kg} kg</span>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => handleStatusUpdate(parcel.id, "delivered")}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2.5 rounded-lg bg-success/15 text-success font-medium hover:bg-success/25 active:bg-success/35 transition-colors"
-                >
-                  <CheckCircle2 className="h-4 w-4" />
-                  Delivered
-                </button>
-                <button
-                  onClick={() => handleStatusUpdate(parcel.id, "failed")}
-                  className="flex-1 flex items-center justify-center gap-1.5 text-sm px-3 py-2.5 rounded-lg bg-destructive/15 text-destructive font-medium hover:bg-destructive/25 active:bg-destructive/35 transition-colors"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Failed
-                </button>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       )}
 
-      {/* Completed section */}
-      {completedParcels.length > 0 && (
+      {/* HISTORY TAB */}
+      {activeTab === "history" && (
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-            Completed
-          </h2>
-          {completedParcels.map((parcel) => (
-            <div
-              key={parcel.id}
-              className="rounded-xl border bg-card/50 p-4 space-y-2 opacity-70"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-code text-xs text-muted-foreground">
-                  {parcel.tracking_code}
-                </span>
-                <ParcelStatusBadge status={parcel.status} />
-              </div>
-              <p className="text-sm">{parcel.recipient_name}</p>
-              <p className="text-xs text-muted-foreground">
-                {parcel.recipient_address}
-              </p>
+          {completedParcels.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground border rounded-xl bg-card/20 shadow-inner">
+              <CheckCircle2 className="h-10 w-10 mx-auto mb-3 opacity-30 text-success" />
+              <p className="text-base font-semibold text-foreground">History is empty</p>
+              <p className="text-xs mt-1">Completed delivery items will be archived here.</p>
             </div>
-          ))}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {parcels.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <Package className="h-12 w-12 mx-auto mb-4 opacity-30" />
-          <p className="text-lg font-medium">No deliveries today</p>
-          <p className="text-sm">Check back later for new assignments.</p>
+          ) : (
+            completedParcels.map((parcel) => (
+              <div
+                key={parcel.id}
+                className="rounded-xl border bg-card/50 p-4 space-y-2 opacity-85 hover:opacity-100 transition-opacity"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-code text-xs text-primary font-semibold">
+                    {parcel.tracking_code}
+                  </span>
+                  <ParcelStatusBadge status={parcel.status} />
+                </div>
+                <div className="text-sm">
+                  <p className="font-semibold text-foreground">{parcel.recipient_name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{parcel.recipient_address}</p>
+                </div>
+                {parcel.delivered_at && (
+                  <p className="text-[10px] text-muted-foreground border-t pt-1.5 flex items-center gap-1">
+                    <Clock className="h-3 w-3 text-success" />
+                    Delivered: {new Date(parcel.delivered_at).toLocaleTimeString(undefined, {
+                      hour: "numeric",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
