@@ -239,3 +239,5 @@ BaseOps features a premium, high-density dark aesthetic designed for operational
 ## License
 
 MIT — use this as a foundation for your own multi-tenant applications.
+
+*More Content Coming in September*
