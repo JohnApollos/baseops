@@ -1,243 +1,165 @@
-# BaseOps
+# BaseOps — Multi-Tenant Logistics & Fleet Management SaaS
 
-> **Open-source, production-grade multi-tenant PWA for logistics and last-mile delivery.**
+[![Next.js](https://img.shields.io/badge/Next.js-16.2-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20RLS-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
+[![Tests](https://img.shields.io/badge/Tests-61%20Passed-success?style=flat-square)](file:///c:/dev/Multi-tenancy/baseops/tests)
 
-BaseOps is a full-stack starter that demonstrates every serious pattern a modern SaaS application needs — multi-tenancy with Row Level Security, role-based access control, offline-first operation with automatic sync, real-time updates, route mapping, and analytics dashboards — all within the logistics domain.
-
-Any logistics company can sign up, onboard their fleet, and manage drivers, parcels, and routes from a single platform — even when drivers are offline in dead zones.
-
-![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
-![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3fcf8e?logo=supabase)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-v4-38bdf8?logo=tailwindcss)
-![PWA](https://img.shields.io/badge/PWA-Offline_First-orange)
-![License](https://img.shields.io/badge/License-MIT-blue)
+**BaseOps** is a production-grade multi-tenant logistics, fleet management, and last-mile delivery Progressive Web Application (PWA). Built on Next.js 16, Supabase, and PostgreSQL, it provides database-level Row Level Security (RLS), real-time dispatcher telemetry, and an offline-first mutation engine for drivers operating in cellular dead zones.
 
 ---
 
-## Architecture
+## Key Capabilities
 
-```mermaid
-graph TB
-    subgraph Client["Browser / PWA"]
-        LP[Landing Page]
-        AUTH[Auth Pages]
-        OB[Onboarding]
-        DD[Dispatcher Dashboard]
-        DRV[Driver Dashboard]
-        OWN[Owner Dashboard]
-        ADM[Admin Portal]
-        DEXIE[(Dexie / IndexedDB)]
-    end
+- **🏢 Multi-Tenant Isolation**: Shared database architecture with hard row-level isolation via `org_id`, PostgreSQL RLS policies, and immutable tenant protection triggers.
+- **📡 Offline-First Driver PWA**: Drivers update parcel statuses offline without network latency. Mutations buffer locally inside IndexedDB via Dexie.js and auto-flush in FIFO order upon reconnection.
+- **🗺️ Real-Time Dispatch Center**: Live parcel Kanban board and interactive Leaflet map projecting driver locations via Supabase Realtime (PostgreSQL CDC).
+- **🔒 Enterprise Security**: `PL/pgSQL SECURITY DEFINER` functions with explicit `search_path = public, pg_temp` hardening, revoked internal RPC privileges, and permanent audit log immutability.
+- **📊 Executive Analytics**: Multi-metric delivery volume, fleet performance, and parcel status charts connected directly to database queries with zero-state fallbacks.
+- **✉️ Team Onboarding**: Secure invitation workflow generating magic links via Resend API and pre-configured role templates.
 
-    subgraph Proxy["Next.js Proxy"]
-        MW[RBAC Guard]
-        MW -->|verify session| SB_AUTH
-        MW -->|check role| SB_DB
-        MW -->|redirect| DD
-        MW -->|redirect| DRV
-        MW -->|redirect| OWN
-    end
+---
 
-    subgraph Supabase["Supabase Backend"]
-        SB_AUTH[Auth + JWT]
-        SB_DB[(PostgreSQL + RLS)]
-        SB_RT[Realtime]
-        SB_STORE[Storage]
-    end
+## Technology Stack
 
-    subgraph Services["External Services"]
-        RESEND[Resend Email]
-        LEAFLET[Leaflet Maps]
-    end
+| Layer | Technology |
+| :--- | :--- |
+| **Framework** | [Next.js 16 App Router](https://nextjs.org/) (Turbopack, React 19) |
+| **Language** | [TypeScript 5](https://www.typescriptlang.org/) (Strict Mode) |
+| **Database** | [PostgreSQL 17](https://www.postgresql.org/) (Supabase Local / Supabase Cloud) |
+| **Authentication** | [Supabase Auth / GoTrue](https://supabase.com/auth) (`@supabase/ssr` with HTTP Cookies) |
+| **Offline Storage** | [Dexie.js / IndexedDB](https://dexie.org/) |
+| **Styling** | [Tailwind CSS v4](https://tailwindcss.com/) & [shadcn/ui](https://ui.shadcn.com/) |
+| **Mapping** | [Leaflet](https://leafletjs.com/) & [React-Leaflet](https://react-leaflet.js.org/) |
+| **Charts** | [Recharts](https://recharts.org/) |
+| **Email Service** | [Resend](https://resend.com/) |
 
-    DRV -->|offline mutations| DEXIE
-    DEXIE -->|sync when online| SB_DB
-    DD -->|realtime subscriptions| SB_RT
-    DD -->|route visualization| LEAFLET
-    OWN -->|invite team| RESEND
-```
+---
 
-## Domain Model
+## Quickstart (Local Development)
 
-| Entity | Description | Tenant Scoped |
-|--------|-------------|:---:|
-| **Organization** | The tenant — a logistics company | — |
-| **Profile** | User linked to auth, assigned a role | ✓ |
-| **Vehicle** | Fleet vehicle (motorcycle/van/truck) | ✓ |
-| **Parcel** | Core operational unit with lifecycle | ✓ |
-| **Route** | Planned delivery route for a driver | ✓ |
-| **Delivery Event** | Immutable audit trail entry | ✓ |
+### 1. Prerequisites
+- [Node.js](https://nodejs.org/) v20+ or v22+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Running)
+- [Supabase CLI](https://supabase.com/docs/guides/cli) (`npm install -g supabase` or via `npx`)
 
-**Parcel Lifecycle:** `Received → Assigned → In Transit → Delivered → Failed / Returned`
-
-**Roles:** `Owner` · `Dispatcher` · `Driver`
-
-## Tech Stack
-
-| Layer | Technology | Purpose |
-|-------|-----------|---------|
-| Framework | Next.js 16 (App Router) | Server components, route groups, middleware |
-| Styling | Tailwind CSS v4 + shadcn/ui | Command-center dark aesthetic |
-| Database | Supabase (PostgreSQL) | Multi-tenant data with RLS |
-| Auth | Supabase Auth | JWT sessions, magic links |
-| Realtime | Supabase Realtime | Live parcel status updates |
-| Offline | Dexie.js (IndexedDB) | Local mutation queue + sync |
-| PWA | @ducanh2912/next-pwa | Service worker, app shell cache |
-| Maps | Leaflet + react-leaflet | Open-source route visualization |
-| Charts | Recharts | Analytics dashboards |
-| Forms | react-hook-form + Zod | Typed validation schemas |
-| Email | Resend | Team invitation emails |
-
-## Project Structure
-
-```
-baseops/
-├── src/
-│   ├── app/
-│   │   ├── (auth)/           ← Login, Register, Forgot Password
-│   │   ├── (onboarding)/     ← 3-step org setup flow
-│   │   ├── (dispatcher)/     ← Command center (owners + dispatchers)
-│   │   ├── (driver)/         ← Mobile-first driver interface
-│   │   ├── (owner)/          ← Org management + analytics
-│   │   ├── (admin)/          ← Super-admin portal
-│   │   ├── api/              ← Route handlers (invite, auth callback)
-│   │   ├── layout.tsx        ← Root layout (dark theme, PWA meta)
-│   │   └── page.tsx          ← Public landing page
-│   ├── components/
-│   │   ├── ui/               ← shadcn primitives (14 components)
-│   │   └── shared/           ← Sidebars, theme provider
-│   ├── lib/
-│   │   ├── supabase/         ← Server, client, and middleware clients
-│   │   ├── validations/      ← All Zod schemas
-│   │   ├── db.ts             ← Dexie IndexedDB schema
-│   │   ├── sync-engine.ts    ← Offline queue + auto-sync
-│   │   └── utils.ts          ← Tailwind merge utility
-│   ├── types/
-│   │   └── index.ts          ← All TypeScript interfaces
-│   └── proxy.ts               ← RBAC route guard (Next.js 16 Proxy)
-├── supabase/
-│   ├── migrations/           ← Schema + RLS policies
-│   └── seed.sql              ← Demo data (Nairobi logistics)
-├── public/
-│   └── manifest.json         ← PWA manifest
-├── .env.example
-├── next.config.ts            ← PWA + Turbopack config
-└── package.json
-```
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- A [Supabase](https://supabase.com) project (free tier works)
-- (Optional) A [Resend](https://resend.com) API key for email invitations
-
-### 1. Clone and Install
-
+### 2. Clone & Install
 ```bash
-git clone https://github.com/your-username/baseops.git
+git clone https://github.com/JohnApollos/baseops.git
 cd baseops
 npm install
 ```
 
-### 2. Configure Environment
+### 3. Start Local Supabase Stack
+```bash
+npx supabase start
+```
 
+### 4. Configure Environment Variables
+Copy the template to `.env.local`:
 ```bash
 cp .env.example .env.local
 ```
+*(The default `.env.example` is pre-configured with local Supabase CLI default credentials).*
 
-Edit `.env.local` with your Supabase project URL, anon key, and service role key. You can find these in your Supabase dashboard under **Settings → API**.
-
-### 3. Set Up the Database
-
-Run the migration in your Supabase SQL Editor or via the CLI:
-
+### 5. Reset & Seed the Database
 ```bash
-# Option A: Copy-paste supabase/migrations/00001_initial_schema.sql into the SQL Editor
-
-# Option B: Use the Supabase CLI
-npx supabase db push
+npm run db:reset
 ```
 
-Then seed the demo data and create auth users cleanly:
-
-```bash
-# 1. Copy-paste supabase/seed.sql into the SQL Editor
-# 2. Run the API-based user seeding script to create test accounts and align operational data:
-node scripts/seed-users.js
-```
-
-### 4. Run Locally
-
+### 6. Start the Application
 ```bash
 npm run dev
 ```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Key Architectural Patterns
-
-### Multi-Tenancy with RLS
-
-Every table has an `org_id` column. Row Level Security policies use `auth.jwt()` to verify the requesting user belongs to the same organization:
-
-```sql
-CREATE POLICY "org_members_can_read_parcels" ON public.parcels
-  FOR SELECT USING (
-    org_id IN (
-      SELECT org_id FROM public.profiles WHERE id = auth.uid()
-    )
-  );
-```
-
-### RBAC Proxy (Next.js 16)
-
-The proxy intercepts every request and performs four operations:
-1. Refreshes the Supabase session
-2. Reads the user's role from their profile
-3. Redirects to the correct dashboard if accessing the wrong route group
-4. Forces incomplete onboarding back to `/onboarding`
-
-### Offline-First Sync Engine
-
-```
-Driver taps "Delivered"
-    → Write to Dexie (instant UI update)
-    → Add to sync_queue (status: pending)
-    → [When online] → Flush to Supabase (FIFO order)
-    → Mark as synced / retry up to 3x / mark as failed
-```
-
-The sync indicator shows: 🟢 Online · 🟡 Syncing · 🔴 Offline (X pending)
-
-### Auto-Generated Tracking Codes
-
-Parcels automatically receive tracking codes in the format `BOP-YYYY-XXXXX` via a database trigger, ensuring uniqueness per organization per year.
-
-## Dashboard Preview
-
-BaseOps features a premium, high-density dark aesthetic designed for operational clarity.
-
-- **Dispatcher Command Center:** Stats bar, real-time map, and Kanban parcel board.
-- **Owner Analytics:** Recharts-powered data visualization for delivery volume and fleet performance.
-- **Driver Mobile App:** Offline-first task management with background sync (IndexedDB).
-- **Validation Pipeline:** Robust multi-step forms with strict Zod enforcement.
-- **RBAC Proxy:** Secure Next.js route protection with Supabase Row Level Security.
+Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
 
-## Roadmap
+## Pre-Configured Test Accounts
 
-- [x] **Phase 1** — Foundation (Auth, RBAC, Schema, Proxy)
-- [x] **Phase 2** — Onboarding + Layout Shells
-- [x] **Phase 3** — Dispatcher Board (Kanban, Leaflet, Realtime)
-- [x] **Phase 4** — Driver Interface + Offline Sync
-- [x] **Phase 5** — Owner Analytics + Team Management
-- [x] **Phase 6** — Polish + Deployment
+The local database seed includes four pre-configured accounts in the `QuickShip Logistics` organization:
+
+| Role | Email | Password | Direct Dashboard URL |
+| :--- | :--- | :--- | :--- |
+| **Owner** | `owner@baseops.dev` | `baseops123` | [http://localhost:3000/owner](http://localhost:3000/owner) |
+| **Dispatcher** | `dispatcher@baseops.dev` | `baseops123` | [http://localhost:3000/dispatch](http://localhost:3000/dispatch) |
+| **Driver 1** | `driver1@baseops.dev` | `baseops123` | [http://localhost:3000/driver](http://localhost:3000/driver) |
+| **Driver 2** | `driver2@baseops.dev` | `baseops123` | [http://localhost:3000/driver](http://localhost:3000/driver) |
+
+---
+
+## Local Service Ports
+
+| Service | Endpoint | Description |
+| :--- | :--- | :--- |
+| **BaseOps Web App** | `http://localhost:3000` | Application frontend & API |
+| **Supabase Studio** | `http://127.0.0.1:54323` | Web SQL Editor & Table Browser |
+| **Inbucket (Mailpit)** | `http://127.0.0.1:54324` | Local email inbox for magic links & invites |
+| **PostgreSQL Database**| `127.0.0.1:54322` | Direct PostgreSQL connection for DBeaver |
+| **Supabase REST API** | `http://127.0.0.1:54321` | PostgREST / GoTrue endpoint |
+
+---
+
+## Connecting with DBeaver
+
+To inspect the local PostgreSQL database using DBeaver:
+- **Host**: `127.0.0.1`
+- **Port**: `54322`
+- **Database**: `postgres`
+- **Username**: `postgres`
+- **Password**: `postgres`
+- **SSL**: Disabled
+
+*For detailed instructions including Supabase Cloud connection parameters, see [`docs/DBeaver.md`](file:///c:/dev/Multi-tenancy/baseops/docs/DBeaver.md).*
+
+---
+
+## Automated Verification & Testing
+
+BaseOps includes an automated test suite comprising 38 unit/contract tests and 23 live database adversarial attack tests (61 total):
+
+```bash
+# Run all unit and security logic tests (38 tests)
+npm test
+
+# Run live PostgreSQL adversarial penetration tests (23 tests)
+npm run test:live
+
+# Run complete test suite (61 tests)
+npm run test:all
+
+# Type-check TypeScript
+npx tsc --noEmit
+
+# Execute Next.js 16 production build
+npm run build
+```
+
+---
+
+## Technical Documentation Master Index
+
+Comprehensive documentation is available in the [`docs/`](file:///c:/dev/Multi-tenancy/baseops/docs) directory:
+
+- [**Architecture Specification**](file:///c:/dev/Multi-tenancy/baseops/docs/ARCHITECTURE.md): System topology, multi-tenancy model, and offline sync pipeline.
+- [**Database Specification**](file:///c:/dev/Multi-tenancy/baseops/docs/DATABASE.md): ER diagram, schema data dictionary, check constraints, and indexing matrix.
+- [**Security Engineering**](file:///c:/dev/Multi-tenancy/baseops/docs/SECURITY.md): RLS policy matrix, security triggers, search_path hardening, and SEC-01 $\rightarrow$ SEC-16 verification results.
+- [**Authentication & RBAC**](file:///c:/dev/Multi-tenancy/baseops/docs/AUTHENTICATION.md): Session lifecycle, token cookie management, and role routing rules.
+- [**Development Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DEVELOPMENT.md): Step-by-step local setup, environment configuration, and test account credentials.
+- [**Testing & Verification**](file:///c:/dev/Multi-tenancy/baseops/docs/TESTING.md): Test suite architecture, live DB harnesses, and test execution procedures.
+- [**Deployment Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DEPLOYMENT.md): Step-by-step Supabase Cloud migration and Vercel hosting setup.
+- [**Environment Configuration**](file:///c:/dev/Multi-tenancy/baseops/docs/ENVIRONMENT.md): Client-safe vs. server-only secret classification and variable matrix.
+- [**DBeaver Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DBeaver.md): Local and Cloud GUI database connection instructions.
+- [**Troubleshooting Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/TROUBLESHOOTING.md): Known issues, root causes, and verified solutions.
+- [**API Reference**](file:///c:/dev/Multi-tenancy/baseops/docs/API.md): HTTP route handlers and database RPC specifications.
+- [**Contributing Standards**](file:///c:/dev/Multi-tenancy/baseops/docs/CONTRIBUTING.md): Code conventions, security commandments, and PR checklists.
+- [**Changelog**](file:///c:/dev/Multi-tenancy/baseops/docs/CHANGELOG.md): Detailed version history and architectural evolution.
+- [**Production Readiness Audit**](file:///c:/dev/Multi-tenancy/baseops/docs/PRODUCTION_READINESS.md): 12-domain production readiness checklist and audit verdict.
+
+---
 
 ## License
 
-MIT — use this as a foundation for your own multi-tenant applications.
-
-*More Content Coming in September*
+This project is licensed under the [MIT License](file:///c:/dev/Multi-tenancy/baseops/LICENSE).

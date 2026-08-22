@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Zap } from "lucide-react";
 
@@ -69,5 +70,3 @@ export default function BillingPage() {
     </div>
   );
 }
-
-import { Badge } from "@/components/ui/badge";

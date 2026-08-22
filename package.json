@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/security/**/*.test.js"
+    "test": "node --test tests/security/invite-api.test.js tests/security/offline-storage.test.js tests/security/parcels-rls.test.js tests/security/profiles-rls.test.js tests/security/schema-integrity.test.js tests/security/vehicles-rls.test.js",
+    "test:live": "node tests/security/live-db-verification.test.js",
+    "test:all": "npm test && npm run test:live",
+    "seed": "node scripts/seed-users.js",
+    "db:reset": "supabase db reset"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
