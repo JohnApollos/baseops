@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ParcelStatusBadge } from "@/components/dispatch/parcel-status-badge";
-import { enqueueSync, initSyncEngine } from "@/lib/sync-engine";
+import { enqueueSync, initSyncEngine, pullAssignedParcels } from "@/lib/sync-engine";
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
@@ -23,8 +23,8 @@ import {
 // status update buttons.
 //
 // 1. Reactively binds to Dexie (IndexedDB) as single source of truth.
-// 2. On mount, seeds mock data if local DB is empty.
-// 3. Fetches assigned parcels from Supabase when online.
+// 2. On mount, initializes sync engine and non-destructively pulls
+//    server state while preserving pending offline mutations.
 // ============================================================
 
 export default function DriverDashboardPage() {
@@ -45,12 +45,12 @@ export default function DriverDashboardPage() {
       }
 
       // 2. Fetch latest assigned parcels from Supabase when online
-      await pullFromSupabase();
+      await handlePull();
     }
     seedAndSync();
   }, []);
 
-  async function pullFromSupabase() {
+  async function handlePull() {
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
     setIsPulling(true);
 
@@ -65,22 +65,11 @@ export default function DriverDashboardPage() {
         return;
       }
 
-      // Query database for driver's assigned parcels
-      const { data: remoteParcels, error } = await supabase
-        .from("parcels")
-        .select("*")
-        .eq("assigned_driver_id", user.id);
-
-      if (error) throw error;
-
-      // Clear old mock records and save current ones (even if empty)
-      await db.parcels.clear();
-      if (remoteParcels && remoteParcels.length > 0) {
-        await db.parcels.bulkPut(remoteParcels);
-      }
+      // Safe non-destructive pull preserving local uncommitted mutations
+      await pullAssignedParcels(user.id);
       toast.success("Synced tasks with server");
     } catch (e: unknown) {
-      console.warn("Could not sync with Supabase (normal if using mock auth):", e);
+      console.warn("Could not sync with Supabase:", e);
     } finally {
       setIsPulling(false);
     }
@@ -193,7 +182,7 @@ export default function DriverDashboardPage() {
           </div>
         </div>
         <button
-          onClick={pullFromSupabase}
+          onClick={handlePull}
           disabled={isPulling}
           className="p-2 rounded-lg border bg-card text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
           title="Refresh assignments"

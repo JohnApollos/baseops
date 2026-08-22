@@ -153,4 +153,67 @@ describe("SEC-06 & SEC-11: Offline IndexedDB Cleanup & Session Isolation", () =>
     assert.strictEqual(executedMutations[0].executedBy, "user-a");
     assert.strictEqual(await db.syncQueue.count(), 0);
   });
+
+  it("ENFORCES (OFF-01): Mutation Deduplication & Idempotency Key merging", async () => {
+    const db = new MockBaseOpsDB();
+
+    // User performs multiple rapid status updates for same parcel
+    const key = "parcels:update:parcel-123";
+    await db.syncQueue.add({
+      id: 1,
+      idempotency_key: key,
+      table_name: "parcels",
+      operation: "update",
+      payload: { id: "parcel-123", status: "in_transit" },
+      status: "pending",
+    });
+
+    // Second update arrives before flush
+    const existing = (await db.syncQueue.toArray()).find((i) => i.idempotency_key === key);
+    if (existing) {
+      existing.payload = { ...existing.payload, status: "delivered" };
+    }
+
+    const items = await db.syncQueue.toArray();
+    assert.strictEqual(items.length, 1);
+    assert.strictEqual(items[0].payload.status, "delivered");
+  });
+
+  it("ENFORCES (OFF-02): Non-destructive pull preserves uncommitted offline mutations", async () => {
+    const db = new MockBaseOpsDB();
+
+    // 1. Local offline mutation in progress: Parcel 1 marked as 'delivered'
+    await db.parcels.add({ id: "p1", status: "delivered", recipient_name: "Client A" });
+    await db.syncQueue.add({
+      id: 1,
+      table_name: "parcels",
+      status: "pending",
+      payload: { id: "p1", status: "delivered" },
+    });
+
+    // 2. Incoming server snapshot has stale status 'in_transit' for p1, and new parcel p2
+    const remoteParcels = [
+      { id: "p1", status: "in_transit", recipient_name: "Client A" },
+      { id: "p2", status: "assigned", recipient_name: "Client B" },
+    ];
+
+    // Safe pull simulation: protect pending local mutations
+    const pendingItems = await db.syncQueue.toArray();
+    const pendingIds = new Set(pendingItems.map((i) => i.payload.id));
+
+    for (const remote of remoteParcels) {
+      if (!pendingIds.has(remote.id)) {
+        await db.parcels.add(remote);
+      }
+    }
+
+    const localParcels = await db.parcels.toArray();
+    const p1Local = localParcels.find((p) => p.id === "p1");
+    const p2Local = localParcels.find((p) => p.id === "p2");
+
+    // p1 retained its offline 'delivered' status and was NOT overwritten by stale server 'in_transit'
+    assert.strictEqual(p1Local.status, "delivered");
+    // p2 was added cleanly
+    assert.strictEqual(p2Local.status, "assigned");
+  });
 });

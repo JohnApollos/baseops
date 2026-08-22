@@ -86,6 +86,7 @@ export function getSyncState(): SyncState {
 /**
  * Adds a mutation to the offline sync queue.
  * Strongly binds the mutation to the originating user and tenant.
+ * Performs client-side deduplication using an idempotency key.
  *
  * @param tableName - The Supabase table to write to (e.g., "parcels")
  * @param operation - "insert", "update", or "delete"
@@ -115,16 +116,34 @@ export async function enqueueSync(
     }
   }
 
-  await db.syncQueue.add({
-    user_id: boundUserId,
-    org_id: boundOrgId,
-    table_name: tableName,
-    operation,
-    payload,
-    status: "pending",
-    retry_count: 0,
-    created_at: new Date().toISOString(),
-  });
+  const entityId = payload.id ? String(payload.id) : undefined;
+  const idempotencyKey = `${tableName}:${operation}:${entityId || Date.now()}`;
+
+  // Deduplication check: if a pending mutation with the same idempotencyKey exists, update it
+  const existingItem = await db.syncQueue
+    .where("status")
+    .equals("pending")
+    .filter((item) => item.idempotency_key === idempotencyKey)
+    .first();
+
+  if (existingItem && existingItem.id) {
+    await db.syncQueue.update(existingItem.id, {
+      payload: { ...existingItem.payload, ...payload },
+      created_at: new Date().toISOString(),
+    });
+  } else {
+    await db.syncQueue.add({
+      user_id: boundUserId,
+      org_id: boundOrgId,
+      idempotency_key: idempotencyKey,
+      table_name: tableName,
+      operation,
+      payload,
+      status: "pending",
+      retry_count: 0,
+      created_at: new Date().toISOString(),
+    });
+  }
 
   // Update the pending count in state
   const pendingCount = await db.syncQueue
@@ -139,6 +158,7 @@ export async function enqueueSync(
 /**
  * Processes the sync queue — called when the device comes online.
  * Validates session identity before executing mutations.
+ * Implements exponential backoff on retries and idempotent mutations.
  */
 async function flushQueue() {
   // Guard: don't start multiple flush cycles simultaneously
@@ -195,8 +215,9 @@ async function flushQueue() {
       }
     }
 
-    // Small delay between items to avoid hammering the server
-    await new Promise((resolve) => setTimeout(resolve, ITEM_DELAY));
+    // Adaptive backoff delay between items
+    const delay = item.retry_count ? Math.min(ITEM_DELAY * Math.pow(2, item.retry_count), 2000) : ITEM_DELAY;
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
   // Update pending count after flush
@@ -212,7 +233,7 @@ async function flushQueue() {
 }
 
 /**
- * Executes a single mutation against Supabase.
+ * Executes a single mutation against Supabase with idempotency guarantees.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function executeMutation(supabase: any, item: SyncQueueItem) {
@@ -220,8 +241,14 @@ async function executeMutation(supabase: any, item: SyncQueueItem) {
 
   switch (operation) {
     case "insert": {
-      const { error } = await supabase.from(table_name).insert(payload);
-      if (error) throw error;
+      // Idempotent upsert by primary key where available
+      if (payload.id) {
+        const { error } = await supabase.from(table_name).upsert(payload, { onConflict: "id" });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from(table_name).insert(payload);
+        if (error) throw error;
+      }
       break;
     }
     case "update": {
@@ -240,6 +267,51 @@ async function executeMutation(supabase: any, item: SyncQueueItem) {
         .eq("id", payload.id);
       if (error) throw error;
       break;
+    }
+  }
+}
+
+/**
+ * Safely pulls assigned parcels from Supabase into local Dexie store.
+ * Preserves uncommitted local pending mutations (OFF-02).
+ */
+export async function pullAssignedParcels(userId: string) {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+  const supabase = createClient();
+  const { data: remoteParcels, error } = await supabase
+    .from("parcels")
+    .select("*")
+    .eq("assigned_driver_id", userId);
+
+  if (error) throw error;
+  if (!remoteParcels) return;
+
+  // Retrieve pending sync queue items to protect uncommitted offline edits
+  const pendingParcelMutations = await db.syncQueue
+    .where("table_name")
+    .equals("parcels")
+    .and((item) => item.status === "pending" || item.status === "syncing")
+    .toArray();
+
+  const pendingParcelIds = new Set(
+    pendingParcelMutations.map((m) => String(m.payload.id)).filter(Boolean)
+  );
+
+  // Upsert remote parcels, excluding any parcel with a pending local mutation
+  for (const remote of remoteParcels) {
+    if (!pendingParcelIds.has(remote.id)) {
+      await db.parcels.put(remote);
+    }
+  }
+
+  // Remove local parcels that no longer exist on server and have no pending mutations
+  const remoteIdSet = new Set(remoteParcels.map((p: any) => p.id));
+  const localParcels = await db.parcels.toArray();
+
+  for (const local of localParcels) {
+    if (!remoteIdSet.has(local.id) && !pendingParcelIds.has(local.id)) {
+      await db.parcels.delete(local.id);
     }
   }
 }

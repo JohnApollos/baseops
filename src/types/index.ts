@@ -51,6 +51,7 @@ export interface Organization {
   plan: PlanTier;
   wallet_balance: number;
   created_at: string;
+  updated_at?: string;
 }
 
 /** A user profile linked to Supabase Auth and scoped to an org. */
@@ -63,6 +64,7 @@ export interface Profile {
   avatar_url: string | null;
   onboarded_at: string | null;
   created_at: string;
+  updated_at?: string;
 }
 
 /** A vehicle in an organization's fleet. */
@@ -73,6 +75,7 @@ export interface Vehicle {
   type: VehicleType;
   status: VehicleStatus;
   created_at: string;
+  updated_at?: string;
 }
 
 /** The core operational unit — a parcel moving through the delivery lifecycle. */
@@ -92,6 +95,7 @@ export interface Parcel {
   notes: string | null;
   created_at: string;
   delivered_at: string | null;
+  updated_at?: string;
 }
 
 /** A planned or active delivery route for a driver. */
@@ -106,6 +110,7 @@ export interface Route {
   start_coords: [number, number] | null;
   end_coords: [number, number] | null;
   created_at: string;
+  updated_at?: string;
 }
 
 /** An immutable audit trail entry — every parcel status change is logged here. */
@@ -127,6 +132,7 @@ export interface SyncQueueItem {
   id?: number; // Auto-incremented by Dexie
   user_id?: string; // Originating user ID for strong session binding
   org_id?: string;  // Originating tenant ID
+  idempotency_key?: string; // Client mutation deduplication key
   table_name: string;
   operation: "insert" | "update" | "delete";
   payload: Record<string, unknown>;

@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Migration: 00002_p0_security_remediation.sql
 -- Description: Remediate P0 Security Blockers
 --   - SEC-01: Profile privilege escalation & organization takeover

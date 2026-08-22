@@ -158,8 +158,8 @@ BEGIN
   VALUES (v_org_id, 'BOP-2026-00003', 'Masoko', 'CBD, Nairobi', 'John Otieno', 'Langata, Nairobi', '+254733333333', 5.0, 'received')
   RETURNING id INTO v_parcel3_id;
 
-  INSERT INTO public.parcels (org_id, tracking_code, sender_name, sender_address, recipient_name, recipient_address, recipient_phone, weight_kg, status, assigned_driver_id, assigned_vehicle_id, delivered_at)
-  VALUES (v_org_id, 'BOP-2026-00004', 'Glovo', 'Lavington, Nairobi', 'Ann Wairimu', 'South B, Nairobi', '+254744444444', 0.5, 'delivered', v_driver1_id, v_vehicle1_id, now() - interval '2 hours')
+  INSERT INTO public.parcels (org_id, tracking_code, sender_name, sender_address, recipient_name, recipient_address, recipient_phone, weight_kg, status, assigned_driver_id, assigned_vehicle_id, created_at, delivered_at)
+  VALUES (v_org_id, 'BOP-2026-00004', 'Glovo', 'Lavington, Nairobi', 'Ann Wairimu', 'South B, Nairobi', '+254744444444', 0.5, 'delivered', v_driver1_id, v_vehicle1_id, now() - interval '4 hours', now() - interval '2 hours')
   RETURNING id INTO v_parcel4_id;
 
   INSERT INTO public.parcels (org_id, tracking_code, sender_name, sender_address, recipient_name, recipient_address, recipient_phone, weight_kg, status, assigned_driver_id, assigned_vehicle_id)

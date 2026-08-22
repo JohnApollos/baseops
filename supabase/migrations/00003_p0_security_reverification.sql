@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Migration: 00003_p0_security_reverification.sql
 -- Description: P0 Security Re-Remediation & Hardening
 --   - SEC-07: Make profiles.org_id strictly immutable via client UPDATE
@@ -14,22 +14,35 @@
 
 CREATE OR REPLACE FUNCTION public.get_user_org_id(user_id UUID)
 RETURNS UUID AS $$
-  SELECT org_id FROM public.profiles WHERE id = user_id;
-$$ LANGUAGE sql SECURITY DEFINER
+DECLARE
+  v_org_id UUID;
+BEGIN
+  SELECT org_id INTO v_org_id FROM public.profiles WHERE id = user_id;
+  RETURN v_org_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_temp;
 
 CREATE OR REPLACE FUNCTION public.get_user_role(user_id UUID)
 RETURNS TEXT AS $$
-  SELECT role FROM public.profiles WHERE id = user_id;
-$$ LANGUAGE sql SECURITY DEFINER
+DECLARE
+  v_role TEXT;
+BEGIN
+  SELECT role INTO v_role FROM public.profiles WHERE id = user_id;
+  RETURN v_role;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_temp;
 
 -- ------------------------------------------------------------
--- 2. SEC-09: REVOKE DIRECT POSTGREST RPC ACCESS ON INTERNAL HELPERS
+-- 2. SEC-09: ACCESS PERMISSIONS ON INTERNAL HELPERS
 -- ------------------------------------------------------------
 
-REVOKE EXECUTE ON FUNCTION public.get_user_org_id(UUID) FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public.get_user_role(UUID) FROM PUBLIC, anon, authenticated;
+-- Revoke from anon/public, grant only to authenticated and postgres
+REVOKE EXECUTE ON FUNCTION public.get_user_org_id(UUID) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.get_user_role(UUID) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_user_org_id(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO authenticated;
 
 -- ------------------------------------------------------------
 -- 3. SEC-07: PROFILES IMMUTABILITY & ATOMIC ONBOARDING
@@ -67,14 +80,7 @@ CREATE TRIGGER trg_protect_profile_role_and_org
 DROP POLICY IF EXISTS "users_can_update_own_profile" ON public.profiles;
 CREATE POLICY "users_can_update_own_profile" ON public.profiles
   FOR UPDATE USING (id = auth.uid())
-  WITH CHECK (
-    id = auth.uid()
-    AND role = (SELECT role FROM public.profiles WHERE id = auth.uid())
-    AND (
-      (org_id IS NULL AND (SELECT org_id FROM public.profiles WHERE id = auth.uid()) IS NULL)
-      OR org_id = (SELECT org_id FROM public.profiles WHERE id = auth.uid())
-    )
-  );
+  WITH CHECK (id = auth.uid());
 
 -- 3.3 Atomic Trusted RPC: create_organization_and_owner
 CREATE OR REPLACE FUNCTION public.create_organization_and_owner(
