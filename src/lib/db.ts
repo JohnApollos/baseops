@@ -50,3 +50,19 @@ class BaseOpsDB extends Dexie {
 
 /** Singleton database instance. */
 export const db = new BaseOpsDB();
+
+/**
+ * Purges all tables in the local IndexedDB database.
+ * Used during logout to prevent sensitive customer/parcel data leakage on shared devices.
+ */
+export async function clearLocalDatabase(): Promise<void> {
+  try {
+    await Promise.all([
+      db.parcels.clear(),
+      db.events.clear(),
+      db.syncQueue.clear(),
+    ]);
+  } catch (err) {
+    console.error("[db] Failed to clear local database:", err);
+  }
+}

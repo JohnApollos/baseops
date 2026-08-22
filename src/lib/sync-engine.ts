@@ -22,7 +22,7 @@
 //    can subscribe to for showing the sync indicator.
 // ============================================================
 
-import { db } from "@/lib/db";
+import { db, clearLocalDatabase } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
 import type { SyncQueueItem, SyncStatus } from "@/types";
 
@@ -85,21 +85,39 @@ export function getSyncState(): SyncState {
 
 /**
  * Adds a mutation to the offline sync queue.
- *
- * Call this whenever a driver performs an action that should be
- * persisted to Supabase. The mutation is stored locally first
- * and will be flushed when the device reconnects.
+ * Strongly binds the mutation to the originating user and tenant.
  *
  * @param tableName - The Supabase table to write to (e.g., "parcels")
  * @param operation - "insert", "update", or "delete"
  * @param payload   - The row data to send to Supabase
+ * @param userId    - Optional explicitly passed user ID
+ * @param orgId     - Optional explicitly passed organization ID
  */
 export async function enqueueSync(
   tableName: string,
   operation: "insert" | "update" | "delete",
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  userId?: string,
+  orgId?: string
 ) {
+  let boundUserId = userId;
+  const boundOrgId = orgId || (typeof payload.org_id === "string" ? payload.org_id : undefined);
+
+  if (!boundUserId) {
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        boundUserId = user.id;
+      }
+    } catch {
+      // offline fallback
+    }
+  }
+
   await db.syncQueue.add({
+    user_id: boundUserId,
+    org_id: boundOrgId,
     table_name: tableName,
     operation,
     payload,
@@ -120,18 +138,21 @@ export async function enqueueSync(
 
 /**
  * Processes the sync queue — called when the device comes online.
- *
- * Items are processed in FIFO order (oldest first). Each item is
- * attempted once per flush cycle. If it fails, the retry_count is
- * incremented and the item remains in the queue for the next cycle.
+ * Validates session identity before executing mutations.
  */
 async function flushQueue() {
   // Guard: don't start multiple flush cycles simultaneously
   if (currentState.isSyncing) return;
 
-  updateState({ isSyncing: true, lastError: null });
-
   const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // If no authenticated user session exists, do not attempt to flush
+  if (!user) {
+    return;
+  }
+
+  updateState({ isSyncing: true, lastError: null });
 
   // Read all pending items, ordered by creation time (FIFO)
   const pendingItems = await db.syncQueue
@@ -140,6 +161,13 @@ async function flushQueue() {
     .sortBy("created_at");
 
   for (const item of pendingItems) {
+    // Session isolation guard: drop orphaned items belonging to another user
+    if (item.user_id && item.user_id !== user.id) {
+      console.warn(`[sync-engine] Purging orphaned sync item #${item.id} belonging to user ${item.user_id}`);
+      await db.syncQueue.delete(item.id!);
+      continue;
+    }
+
     try {
       // Mark as syncing
       await db.syncQueue.update(item.id!, { status: "syncing" as SyncStatus });
@@ -150,6 +178,7 @@ async function flushQueue() {
       // Success — mark as synced
       await db.syncQueue.update(item.id!, { status: "synced" as SyncStatus });
     } catch (error) {
+      console.error(`[sync-engine] Mutation failed for item #${item.id}:`, error);
       const newRetryCount = (item.retry_count || 0) + 1;
       const newStatus: SyncStatus =
         newRetryCount >= MAX_RETRIES ? "failed" : "pending";
@@ -184,9 +213,6 @@ async function flushQueue() {
 
 /**
  * Executes a single mutation against Supabase.
- *
- * This function maps the sync queue item's `operation` and `table_name`
- * to the appropriate Supabase call.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function executeMutation(supabase: any, item: SyncQueueItem) {
@@ -218,16 +244,35 @@ async function executeMutation(supabase: any, item: SyncQueueItem) {
   }
 }
 
+// ----- Centralized Auth Security Listener -----
+
+let authListenerSubscribed = false;
+
+/**
+ * Sets up centralized auth state listener.
+ * Automatically clears all local customer data on sign-out across all tabs/windows.
+ */
+export function setupAuthSecurityListener() {
+  if (typeof window === "undefined" || authListenerSubscribed) return;
+  authListenerSubscribed = true;
+
+  const supabase = createClient();
+  supabase.auth.onAuthStateChange(async (event) => {
+    if (event === "SIGNED_OUT") {
+      await clearLocalDatabase();
+    }
+  });
+}
+
 // ----- Lifecycle -----
 
 /**
  * Initializes the sync engine.
- *
- * Call this once when the app mounts (e.g., in a root layout effect).
- * It sets up the online/offline event listeners and performs an
- * initial count of pending items.
  */
 export async function initSyncEngine() {
+  // Attach auth security listener
+  setupAuthSecurityListener();
+
   // Count existing pending items
   const pendingCount = await db.syncQueue
     .where("status")
@@ -238,7 +283,6 @@ export async function initSyncEngine() {
   // Listen for connectivity changes
   window.addEventListener("online", () => {
     updateState({ isOnline: true });
-    // Automatically flush when we come back online
     flushQueue();
   });
 
@@ -254,7 +298,6 @@ export async function initSyncEngine() {
 
 /**
  * Manually triggers a sync flush.
- * Useful for "Retry sync" buttons in the UI.
  */
 export async function manualSync() {
   if (!navigator.onLine) {

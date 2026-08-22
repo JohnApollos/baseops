@@ -79,12 +79,14 @@ export default function OnboardingPage() {
     setIsLoading(true);
     const supabase = createClient();
 
-    // Create the organization
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .insert({ name: data.name, slug: data.slug })
-      .select("id")
-      .single();
+    // Call trusted database RPC to atomically create organization and bind owner profile
+    const { data: orgResult, error: orgError } = await supabase.rpc(
+      "create_organization_and_owner",
+      {
+        org_name: data.name,
+        org_slug: data.slug,
+      }
+    );
 
     if (orgError) {
       toast.error(orgError.message);
@@ -92,19 +94,8 @@ export default function OnboardingPage() {
       return;
     }
 
-    // Link the current user to this org
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (user) {
-      await supabase
-        .from("profiles")
-        .update({ org_id: org.id })
-        .eq("id", user.id);
-    }
-
-    setOrgId(org.id);
+    const createdOrgId = (orgResult as any)?.id || orgResult;
+    setOrgId(createdOrgId);
     setIsLoading(false);
     setStep(2);
     toast.success("Organization created!");

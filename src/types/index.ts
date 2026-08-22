@@ -125,6 +125,8 @@ export interface DeliveryEvent {
 /** An entry in the offline sync queue — lives in IndexedDB only, never Supabase. */
 export interface SyncQueueItem {
   id?: number; // Auto-incremented by Dexie
+  user_id?: string; // Originating user ID for strong session binding
+  org_id?: string;  // Originating tenant ID
   table_name: string;
   operation: "insert" | "update" | "delete";
   payload: Record<string, unknown>;

@@ -91,8 +91,8 @@ export default function DriversPage() {
         body: JSON.stringify({
           email: email.trim().toLowerCase(),
           role: "driver",
-          fullName: fullName.trim(),
-          orgId,
+          full_name: fullName.trim(),
+          org_id: orgId,
           phone: phone.trim() || null,
         }),
       });

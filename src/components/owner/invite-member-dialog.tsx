@@ -58,27 +58,25 @@ export function InviteMemberDialog() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      let orgId = "org1";
-      let orgName = "QuickShip Logistics";
-      let inviterName = "Owner";
-
-      if (user) {
-        // Fetch inviter's organization details
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("org_id, full_name, organizations(name)")
-          .eq("id", user.id)
-          .single();
-
-        if (profile) {
-          orgId = profile.org_id || orgId;
-          inviterName = profile.full_name || inviterName;
-          if (profile.organizations) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            orgName = (profile.organizations as any).name || orgName;
-          }
-        }
+      if (!user) {
+        throw new Error("You must be logged in to invite team members.");
       }
+
+      // Fetch inviter's organization details
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("org_id, full_name, organizations(name)")
+        .eq("id", user.id)
+        .single();
+
+      if (!profile?.org_id) {
+        throw new Error("Cannot invite team members: missing organization context.");
+      }
+
+      const orgId = profile.org_id;
+      const inviterName = profile.full_name || "An administrator";
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const orgName = (profile.organizations as any)?.name || "Your team";
 
       const response = await fetch("/api/invite-team", {
         method: "POST",

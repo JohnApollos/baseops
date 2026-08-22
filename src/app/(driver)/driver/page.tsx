@@ -27,60 +27,6 @@ import {
 // 3. Fetches assigned parcels from Supabase when online.
 // ============================================================
 
-const initialParcels: Parcel[] = [
-  {
-    id: "p1",
-    org_id: "org1",
-    tracking_code: "BOP-2025-00001",
-    sender_name: "Jumia Kenya",
-    sender_address: "Mombasa Rd, Nairobi",
-    recipient_name: "Peter Kamau",
-    recipient_address: "Kilimani, Nairobi",
-    recipient_phone: "+254711111111",
-    weight_kg: 2.5,
-    status: "in_transit",
-    assigned_driver_id: "d1",
-    assigned_vehicle_id: "v1",
-    notes: "Leave with security if not home",
-    created_at: new Date().toISOString(),
-    delivered_at: null,
-  },
-  {
-    id: "p6",
-    org_id: "org1",
-    tracking_code: "BOP-2025-00006",
-    sender_name: "Shopify KE",
-    sender_address: "Upperhill, Nairobi",
-    recipient_name: "Lucy Njeri",
-    recipient_address: "Roysambu, Nairobi",
-    recipient_phone: "+254766666666",
-    weight_kg: 1.8,
-    status: "in_transit",
-    assigned_driver_id: "d1",
-    assigned_vehicle_id: "v1",
-    notes: null,
-    created_at: new Date().toISOString(),
-    delivered_at: null,
-  },
-  {
-    id: "p2",
-    org_id: "org1",
-    tracking_code: "BOP-2025-00002",
-    sender_name: "Amazon KE",
-    sender_address: "Westlands, Nairobi",
-    recipient_name: "Grace Muthoni",
-    recipient_address: "Karen, Nairobi",
-    recipient_phone: "+254722222222",
-    weight_kg: 1.0,
-    status: "assigned",
-    assigned_driver_id: "d1",
-    assigned_vehicle_id: "v2",
-    notes: "Call before delivery",
-    created_at: new Date().toISOString(),
-    delivered_at: null,
-  },
-];
-
 export default function DriverDashboardPage() {
   const [isPulling, setIsPulling] = useState(false);
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
@@ -98,13 +44,7 @@ export default function DriverDashboardPage() {
         console.warn("Failed to initialize offline sync engine:", err);
       }
 
-      // 2. Seed IndexedDB with initial mock data if empty (gives instantly usable UI)
-      const count = await db.parcels.count();
-      if (count === 0) {
-        await db.parcels.bulkAdd(initialParcels);
-      }
-
-      // 3. Fetch latest data from Supabase if online and session is valid
+      // 2. Fetch latest assigned parcels from Supabase when online
       await pullFromSupabase();
     }
     seedAndSync();
@@ -175,27 +115,39 @@ export default function DriverDashboardPage() {
     }
 
     // 2. Enqueue sync
-    await enqueueSync("parcels", "update", {
-      id: parcelId,
-      status: newStatus,
-      delivered_at: deliveredAt,
-    });
+    await enqueueSync(
+      "parcels",
+      "update",
+      {
+        id: parcelId,
+        status: newStatus,
+        delivered_at: deliveredAt,
+      },
+      targetParcel.assigned_driver_id || undefined,
+      targetParcel.org_id
+    );
 
     // 3. Create delivery audit event
     const eventId = `evt-${Date.now()}`;
-    await enqueueSync("delivery_events", "insert", {
-      id: eventId,
-      parcel_id: parcelId,
-      org_id: targetParcel.org_id,
-      driver_id: targetParcel.assigned_driver_id || "d1",
-      event_type: newStatus === "delivered" ? "delivered" : "failed",
-      notes:
-        newStatus === "delivered"
-          ? "Delivered successfully"
-          : "Delivery failed — recipient unavailable",
-      coords: [-1.2921, 36.8219], // Standard GPS fallback
-      created_at: new Date().toISOString(),
-    });
+    await enqueueSync(
+      "delivery_events",
+      "insert",
+      {
+        id: eventId,
+        parcel_id: parcelId,
+        org_id: targetParcel.org_id,
+        driver_id: targetParcel.assigned_driver_id,
+        event_type: newStatus === "delivered" ? "delivered" : "failed",
+        notes:
+          newStatus === "delivered"
+            ? "Delivered successfully"
+            : "Delivery failed — recipient unavailable",
+        coords: [-1.2921, 36.8219], // Standard GPS fallback
+        created_at: new Date().toISOString(),
+      },
+      targetParcel.assigned_driver_id || undefined,
+      targetParcel.org_id
+    );
 
     toast.success(
       newStatus === "delivered"

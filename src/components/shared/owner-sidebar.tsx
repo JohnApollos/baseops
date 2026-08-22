@@ -26,12 +26,15 @@ const navItems = [
   { label: "Billing", href: "/owner/billing", icon: CreditCard },
 ];
 
+import { clearLocalDatabase } from "@/lib/db";
+
 export function OwnerSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleSignOut() {
+    await clearLocalDatabase();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");

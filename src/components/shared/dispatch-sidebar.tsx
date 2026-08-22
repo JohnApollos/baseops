@@ -18,7 +18,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -36,12 +35,15 @@ const navItems = [
   { label: "Drivers", href: "/dispatch/drivers", icon: Users },
 ];
 
+import { clearLocalDatabase } from "@/lib/db";
+
 export function DispatchSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   async function handleSignOut() {
+    await clearLocalDatabase();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
