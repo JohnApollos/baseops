@@ -51,8 +51,8 @@ export default function OrganizationSettingsPage() {
         setOrg(orgData);
         setOrgName(orgData.name);
         setOrgSlug(orgData.slug);
-      } catch (err: any) {
-        toast.error("Error loading organization settings: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error loading organization settings: " + (err as Error).message);
       } finally {
         setLoading(false);
       }
@@ -85,8 +85,8 @@ export default function OrganizationSettingsPage() {
       
       // Update local state
       setOrg((prev) => prev ? { ...prev, name: orgName, slug: orgSlug } : null);
-    } catch (err: any) {
-      toast.error("Failed to save changes: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Failed to save changes: " + (err as Error).message);
     } finally {
       setSubmitting(false);
     }

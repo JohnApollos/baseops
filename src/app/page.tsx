@@ -11,10 +11,6 @@ import {
   ArrowRight,
   ExternalLink,
   Zap,
-  Truck,
-  Database,
-  Globe,
-  Fingerprint,
 } from "lucide-react";
 
 // ============================================================

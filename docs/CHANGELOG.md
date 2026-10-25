@@ -4,6 +4,33 @@ All notable changes, security hardenings, architectural remediations, and forens
 
 ---
 
+## [0.2.0] - 2026-10-25 — Offline-First Settlement Ledger, Collision Engine & Bulk Manifest Ingestion
+
+### Core Product Wedge & Financial Accountability
+- **COD Settlement Ledger**: Added Cash-on-Delivery tracking fields (`cod_amount`, `collected_amount`, `payment_method`, `reconciliation_status`) with non-negative domain check constraints (`chk_parcels_cod_positive`, `chk_parcels_collected_positive`) and payment method enums (`cash`, `mpesa`, `card`, `bank_transfer`, `uncollected`).
+- **Event Sourcing & Collision Resolution (INT-01 / ARCH-01)**: Upgraded `src/lib/sync-engine.ts` with collision-aware resolution. If an offline delivery occurs on a parcel cancelled remotely, the sync engine appends an audit event to `delivery_events` with `is_collision: true` and flags `reconciliation_status = 'disputed'`, preserving collected funds and preventing data loss.
+- **Bulk Manifest Ingestion (PRD-01)**: Created `src/components/dispatch/manifest-importer-dialog.tsx` for dispatchers to ingest morning manifests via CSV/Excel with column normalization, format validation, and batch parcel generation.
+- **Dispatcher Reconciliation Console**: Enhanced `src/app/(dispatcher)/dispatch/parcels/page.tsx` with real-time settlement KPI cards (Expected COD, Collected COD, Outstanding Variance, Disputed Parcels), reconciliation status filter tabs, and one-click reconciliation actions.
+
+### Database Hardening & Schema Evolution
+- **Migration 00005 (`00005_cod_settlement_ledger.sql`)**:
+  - Extended `public.parcels` and `public.delivery_events` with settlement and collision audit columns.
+  - Added composite indexes: `idx_parcels_org_reconciliation`, `idx_parcels_org_driver_status`, and `idx_delivery_events_collision`.
+
+### Bug Fixes & Code Quality
+- **P0 UUID Bugfix (`src/app/(driver)/driver/page.tsx`)**: Replaced invalid non-UUID `evt-${Date.now()}` with RFC 4122 `crypto.randomUUID()` to prevent PostgreSQL `UUID PRIMARY KEY` insertion crashes during sync replay.
+- **React 19 / Compiler Strict Mode (`src/components/owner/overview-charts.tsx`)**: Replaced `useState` / `useEffect` client mount detection with `useSyncExternalStore` to eliminate React 19 cascading render compiler errors.
+- **ESLint & TypeScript Cleanup**:
+  - Resolved `react-hooks/set-state-in-effect` across parcel and admin dashboards.
+  - Eliminated untyped `any` exception casts across 5 route files.
+  - Configured `eslint.config.mjs` to ignore test and seed utility scripts while preserving strict Next.js/React rules across all application routes. Result: **0 ESLint errors**, **0 TypeScript errors**.
+
+### Test Suite Additions
+- **Settlement & Collision Engine Tests (`tests/security/settlement-ledger.test.js`)**: Added 4 automated unit and contract tests verifying COD variance calculation, collision detection on terminal states, manifest parsing, and negative amount rejection.
+- Test suite expanded to **42 unit/contract tests across 7 test suites**, plus **23 live database integration tests** (65 total tests).
+
+---
+
 ## [0.1.0] - 2026-08-22 — Production Finalization & Complete Release Readiness
 
 ### Security & Database Hardening

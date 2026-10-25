@@ -61,14 +61,14 @@ export default function FleetPage() {
 
         if (fleetErr) throw fleetErr;
         setVehicles(fleetData || []);
-      } catch (err: any) {
-        toast.error("Error loading fleet data: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error loading fleet data: " + (err as Error).message);
       } finally {
         setLoading(false);
       }
     }
     loadOrgAndFleet();
-  }, []);
+  }, [supabase]);
 
   async function handleAddVehicle(e: React.FormEvent) {
     e.preventDefault();
@@ -97,8 +97,8 @@ export default function FleetPage() {
       toast.success(`Vehicle ${plate.toUpperCase()} registered successfully!`);
       setVehicles((prev) => [data, ...prev]);
       setPlate("");
-    } catch (err: any) {
-      toast.error("Failed to register vehicle: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Failed to register vehicle: " + (err as Error).message);
     } finally {
       setSubmitting(false);
     }

@@ -64,6 +64,10 @@ erDiagram
         text recipient_address
         text recipient_phone
         numeric weight_kg
+        numeric cod_amount
+        numeric collected_amount
+        text payment_method
+        text reconciliation_status
         text status
         uuid assigned_driver_id FK
         uuid assigned_vehicle_id FK
@@ -79,6 +83,11 @@ erDiagram
         uuid org_id FK
         uuid driver_id FK
         text event_type
+        numeric amount_collected
+        text payment_method
+        text payment_reference
+        boolean is_collision
+        text collision_reason
         text notes
         numeric_array coords
         timestamptz created_at
@@ -145,7 +154,7 @@ Fleet vehicles registered under an organization.
 | *Composite* | *Unique* | `UNIQUE (org_id, registration_plate)` | Prevents duplicate plates within tenant. |
 
 ### 2.4 `public.parcels`
-Individual delivery items managed by the tenant.
+Individual delivery items managed by the tenant, including Cash-on-Delivery (COD) financial expectations.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
@@ -158,6 +167,10 @@ Individual delivery items managed by the tenant.
 | `recipient_address` | `TEXT` | `NOT NULL` | Destination delivery address. |
 | `recipient_phone` | `TEXT` | `NOT NULL` | Recipient contact phone. |
 | `weight_kg` | `NUMERIC(6,2)` | `NOT NULL DEFAULT 1.0 CHECK (weight_kg > 0 AND weight_kg <= 10000)` | Item weight in kg. |
+| `cod_amount` | `NUMERIC(12,2)`| `NOT NULL DEFAULT 0.00 CHECK (cod_amount >= 0)` | Expected cash/mobile money to collect. |
+| `collected_amount` | `NUMERIC(12,2)`| `NOT NULL DEFAULT 0.00 CHECK (collected_amount >= 0)` | Actual amount collected on delivery. |
+| `payment_method` | `TEXT` | `NOT NULL DEFAULT 'cash' CHECK (payment_method IN ('cash', 'mpesa', 'card', 'bank_transfer', 'uncollected'))` | Payment channel. |
+| `reconciliation_status` | `TEXT` | `NOT NULL DEFAULT 'pending' CHECK (reconciliation_status IN ('pending', 'reconciled', 'disputed'))` | Financial reconciliation status. |
 | `status` | `TEXT` | `NOT NULL DEFAULT 'received' CHECK (status IN ('received', 'assigned', 'in_transit', 'delivered', 'failed', 'returned'))` | Lifecycle state. |
 | `assigned_driver_id`| `UUID` | `NULLABLE REFERENCES public.profiles(id) ON DELETE SET NULL` | Driver assigned to parcel. |
 | `assigned_vehicle_id`| `UUID` | `NULLABLE REFERENCES public.vehicles(id) ON DELETE SET NULL` | Vehicle assigned to parcel. |
@@ -168,7 +181,7 @@ Individual delivery items managed by the tenant.
 | *Check* | *Constraint* | `CHECK (delivered_at IS NULL OR delivered_at >= created_at)` | Chronological delivery validation. |
 
 ### 2.5 `public.delivery_events`
-Immutable append-only audit trail logging delivery lifecycle milestones and GPS telemetry.
+Immutable append-only audit trail logging delivery lifecycle milestones, payment collections, collision diagnostics, and GPS telemetry.
 
 | Column | Type | Constraints | Description |
 | :--- | :--- | :--- | :--- |
@@ -177,6 +190,11 @@ Immutable append-only audit trail logging delivery lifecycle milestones and GPS 
 | `org_id` | `UUID` | `NOT NULL REFERENCES public.organizations(id) ON DELETE CASCADE` | Associated tenant. |
 | `driver_id` | `UUID` | `NULLABLE REFERENCES public.profiles(id) ON DELETE SET NULL` | Driver logging the event. |
 | `event_type` | `TEXT` | `NOT NULL CHECK (event_type IN ('received', 'assigned', 'picked_up', 'attempted', 'delivered', 'failed', 'returned'))` | Milestone type. |
+| `amount_collected` | `NUMERIC(12,2)`| `NOT NULL DEFAULT 0.00 CHECK (amount_collected >= 0)` | Funds collected during this event. |
+| `payment_method` | `TEXT` | `NULLABLE` | Payment channel (`cash`, `mpesa`, etc.). |
+| `payment_reference` | `TEXT` | `NULLABLE` | M-Pesa receipt / check reference. |
+| `is_collision` | `BOOLEAN` | `NOT NULL DEFAULT false` | Set true if event collided with server terminal state. |
+| `collision_reason`| `TEXT` | `NULLABLE` | Diagnostic reason for operational collision. |
 | `notes` | `TEXT` | `NULLABLE` | Driver remarks or failure reasons. |
 | `coords` | `NUMERIC[]` | `NULLABLE` | GPS coordinates `[latitude, longitude]`. |
 | `created_at` | `TIMESTAMPTZ` | `NOT NULL DEFAULT now()` | Event log timestamp. |
@@ -204,14 +222,15 @@ Daily delivery routes bundling multiple parcels to a specific driver and vehicle
 
 ## 3. Migration History
 
-The schema is built chronologically from these four migrations:
+The schema is built chronologically from these migrations:
 
 | Migration File | Primary Responsibilities |
 | :--- | :--- |
-| [`00001_initial_schema.sql`](file:///c:/dev/Multi-tenancy/baseops/supabase/migrations/00001_initial_schema.sql) | Creates all 6 core tables, basic constraints, automatic profile creation trigger on `auth.users`, and initial RLS policies. |
-| [`00002_p0_security_remediation.sql`](file:///c:/dev/Multi-tenancy/baseops/supabase/migrations/00002_p0_security_remediation.sql) | Hardens parcel update policies, restricts driver mutation scope to assigned parcels, and introduces tenant protection triggers. |
-| [`00003_p0_security_reverification.sql`](file:///c:/dev/Multi-tenancy/baseops/supabase/migrations/00003_p0_security_reverification.sql) | Hardens helper functions (`get_user_org_id`, `get_user_role`) as `PL/pgSQL SECURITY DEFINER` with explicit `search_path = public, pg_temp`; prevents RLS recursive subquery errors; implements atomic `create_organization_and_owner` RPC. |
-| [`00004_p1_database_architecture_hardening.sql`](file:///c:/dev/Multi-tenancy/baseops/supabase/migrations/00004_p1_database_architecture_hardening.sql) | Adds 17 performance indexes, check constraints (`chk_organizations_wallet_balance_positive`, `chk_parcels_weight_range`, `chk_parcels_delivery_time_order`, `uq_vehicles_org_plate`), route tenant protection trigger, and automated `updated_at` triggers. |
+| [`00001_initial_schema.sql`](../supabase/migrations/00001_initial_schema.sql) | Creates all 6 core tables, basic constraints, automatic profile creation trigger on `auth.users`, and initial RLS policies. |
+| [`00002_p0_security_remediation.sql`](../supabase/migrations/00002_p0_security_remediation.sql) | Hardens parcel update policies, restricts driver mutation scope to assigned parcels, and introduces tenant protection triggers. |
+| [`00003_p0_security_reverification.sql`](../supabase/migrations/00003_p0_security_reverification.sql) | Hardens helper functions (`get_user_org_id`, `get_user_role`) as `PL/pgSQL SECURITY DEFINER` with explicit `search_path = public, pg_temp`; prevents RLS recursive subquery errors; implements atomic `create_organization_and_owner` RPC. |
+| [`00004_p1_database_architecture_hardening.sql`](../supabase/migrations/00004_p1_database_architecture_hardening.sql) | Adds 17 performance indexes, check constraints (`chk_organizations_wallet_balance_positive`, `chk_parcels_weight_range`, `chk_parcels_delivery_time_order`, `uq_vehicles_org_plate`), route tenant protection trigger, and automated `updated_at` triggers. |
+| [`00005_cod_settlement_ledger.sql`](../supabase/migrations/00005_cod_settlement_ledger.sql) | Adds Cash-on-Delivery (COD) financial columns and check constraints, collision detection flags on `delivery_events`, and composite indexes for reconciliation and driver workload queries. |
 
 ---
 
@@ -246,19 +265,6 @@ BEGIN
     RETURN v_org_id;
 END;
 $$;
-
--- Atomic Onboarding RPC
-CREATE OR REPLACE FUNCTION public.create_organization_and_owner(
-    org_name TEXT,
-    org_slug TEXT
-)
-RETURNS UUID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, pg_temp
-AS $$
-...
-$$;
 ```
 
 ---
@@ -276,6 +282,7 @@ $$;
 | `idx_parcels_vehicle_id` | `parcels` | `(assigned_vehicle_id)` | Vehicle workload join lookups |
 | `idx_parcels_org_driver_status` | `parcels` | `(org_id, assigned_driver_id, status)` | Driver active workload filtering |
 | `idx_parcels_org_created_at` | `parcels` | `(org_id, created_at DESC)` | Dispatch parcel list pagination |
+| `idx_parcels_org_reconciliation`| `parcels` | `(org_id, reconciliation_status)` | COD reconciliation filter tabs |
 | `idx_routes_org_id` | `routes` | `(org_id)` | Tenant route listing |
 | `idx_routes_driver_id` | `routes` | `(driver_id)` | Driver daily route queries |
 | `idx_routes_vehicle_id` | `routes` | `(vehicle_id)` | Vehicle schedule lookups |
@@ -284,6 +291,7 @@ $$;
 | `idx_delivery_events_org_id` | `delivery_events` | `(org_id)` | Tenant audit log evaluation |
 | `idx_delivery_events_driver_id` | `delivery_events` | `(driver_id)` | Driver coordinate history queries |
 | `idx_delivery_events_parcel_created`| `delivery_events` | `(parcel_id, created_at ASC)` | Chronological milestone replay |
+| `idx_delivery_events_collision` | `delivery_events` | `(parcel_id, is_collision)` | Collision audit query performance |
 
 ---
 

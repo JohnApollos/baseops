@@ -50,8 +50,8 @@ export default function NewParcelPage() {
 
         if (error) throw error;
         setOrgId(profile.org_id);
-      } catch (err: any) {
-        toast.error("Failed to load organization: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Failed to load organization: " + (err as Error).message);
       }
     }
     loadOrgContext();
@@ -108,8 +108,8 @@ export default function NewParcelPage() {
       setCreatedCode(newParcel.tracking_code);
       toast.success(`Parcel registered! Tracking Code: ${newParcel.tracking_code}`);
       setStep(4);
-    } catch (err: any) {
-      toast.error("Failed to register parcel: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Failed to register parcel: " + (err as Error).message);
     } finally {
       setIsLoading(false);
     }

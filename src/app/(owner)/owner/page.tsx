@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DeliveryVolumeChart, StatusDistributionPie, FleetPerformanceBar } from "@/components/owner/overview-charts";
-import { Package, TrendingUp, Truck, Loader2 } from "lucide-react";
+import { Package, Truck, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function OwnerDashboardPage() {
@@ -66,8 +66,8 @@ export default function OwnerDashboardPage() {
           activeFleetCount,
           totalFleetCount,
         });
-      } catch (err: any) {
-        console.warn("Failed to query live dashboard stats, showing fallbacks.", err.message);
+      } catch (err: unknown) {
+        console.warn("Failed to query live dashboard stats, showing fallbacks.", (err as Error).message);
       } finally {
         setLoading(false);
       }

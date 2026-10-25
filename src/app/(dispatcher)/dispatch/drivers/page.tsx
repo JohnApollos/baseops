@@ -20,7 +20,6 @@ import type { Profile } from "@/types";
 
 export default function DriversPage() {
   const [drivers, setDrivers] = useState<Profile[]>([]);
-  const [emails, setEmails] = useState<Record<string, string>>({}); // Mapping profile ID to email from a user lookup
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -65,14 +64,14 @@ export default function DriversPage() {
         setDrivers(driverData || []);
 
         // Also fetch emails for these drivers from our API or invite list (since auth.users emails require service-role/admin privilege, we can fetch them via a helper if needed or fallback)
-      } catch (err: any) {
-        toast.error("Error loading drivers: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error loading drivers: " + (err as Error).message);
       } finally {
         setLoading(false);
       }
     }
     loadOrgAndDrivers();
-  }, []);
+  }, [supabase]);
 
   async function handleInviteDriver(e: React.FormEvent) {
     e.preventDefault();
@@ -122,8 +121,8 @@ export default function DriversPage() {
       setFullName("");
       setEmail("");
       setPhone("");
-    } catch (err: any) {
-      toast.error(err.message || "Something went wrong.");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Something went wrong.");
     } finally {
       setSubmitting(false);
     }

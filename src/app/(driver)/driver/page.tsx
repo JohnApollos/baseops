@@ -7,7 +7,7 @@ import { enqueueSync, initSyncEngine, pullAssignedParcels } from "@/lib/sync-eng
 import { db } from "@/lib/db";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import type { Parcel, ParcelStatus } from "@/types";
+import type { ParcelStatus } from "@/types";
 import {
   CheckCircle2,
   XCircle,
@@ -16,11 +16,12 @@ import {
   Package,
   Clock,
   RefreshCw,
+  Coins,
 } from "lucide-react";
 
 // ============================================================
 // Driver Dashboard — mobile-first parcel cards with offline
-// status update buttons.
+// status update buttons and COD financial tracking.
 //
 // 1. Reactively binds to Dexie (IndexedDB) as single source of truth.
 // 2. On mount, initializes sync engine and non-destructively pulls
@@ -92,12 +93,15 @@ export default function DriverDashboardPage() {
     if (!targetParcel) return;
 
     const deliveredAt = newStatus === "delivered" ? new Date().toISOString() : null;
+    const collectedAmount = newStatus === "delivered" ? Number(targetParcel.cod_amount || 0) : 0;
 
     // 1. Update Dexie locally
     try {
       await db.parcels.update(parcelId, {
         status: newStatus,
         delivered_at: deliveredAt,
+        collected_amount: collectedAmount,
+        reconciliation_status: "pending",
       });
     } catch (err) {
       console.error("Dexie local update error:", err);
@@ -111,13 +115,19 @@ export default function DriverDashboardPage() {
         id: parcelId,
         status: newStatus,
         delivered_at: deliveredAt,
+        collected_amount: collectedAmount,
+        reconciliation_status: "pending",
       },
       targetParcel.assigned_driver_id || undefined,
       targetParcel.org_id
     );
 
-    // 3. Create delivery audit event
-    const eventId = `evt-${Date.now()}`;
+    // 3. Create delivery audit event with valid UUID RFC 4122
+    const eventId =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : "00000000-0000-4000-8000-" + Date.now().toString(16).padStart(12, "0");
+
     await enqueueSync(
       "delivery_events",
       "insert",
@@ -129,8 +139,10 @@ export default function DriverDashboardPage() {
         event_type: newStatus === "delivered" ? "delivered" : "failed",
         notes:
           newStatus === "delivered"
-            ? "Delivered successfully"
+            ? `Delivered successfully. Collected KES ${collectedAmount} via ${targetParcel.payment_method || "cash"}`
             : "Delivery failed — recipient unavailable",
+        amount_collected: collectedAmount,
+        payment_method: targetParcel.payment_method || "cash",
         coords: [-1.2921, 36.8219], // Standard GPS fallback
         created_at: new Date().toISOString(),
       },
@@ -140,7 +152,7 @@ export default function DriverDashboardPage() {
 
     toast.success(
       newStatus === "delivered"
-        ? "Marked as delivered ✓"
+        ? `Delivered ✓${collectedAmount > 0 ? ` (Collected KES ${collectedAmount})` : ""}`
         : "Marked as failed ✗",
       {
         description: navigator.onLine
@@ -181,39 +193,39 @@ export default function DriverDashboardPage() {
             </span>
           </div>
         </div>
+
         <button
           onClick={handlePull}
           disabled={isPulling}
-          className="p-2 rounded-lg border bg-card text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-          title="Refresh assignments"
+          className="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1.5 hover:bg-muted transition-colors disabled:opacity-50"
+          title="Pull fresh data from server"
         >
-          <RefreshCw className={`h-4 w-4 ${isPulling ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3 w-3 ${isPulling ? "animate-spin" : ""}`} />
+          Sync
         </button>
       </div>
 
-      {/* Segmented Tabs Navigation */}
-      <div className="grid grid-cols-2 p-1 rounded-lg bg-muted border bg-card/30 backdrop-blur-sm">
+      {/* Tabs */}
+      <div className="flex border-b border-border/50 text-sm">
         <button
-          type="button"
           onClick={() => setActiveTab("active")}
-          className={`py-2 text-xs sm:text-sm font-semibold rounded-md transition-all ${
+          className={`pb-2 px-3 font-medium transition-colors relative ${
             activeTab === "active"
-              ? "bg-card text-primary shadow-sm"
+              ? "text-primary border-b-2 border-primary font-semibold"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
           Active Tasks ({activeParcels.length})
         </button>
         <button
-          type="button"
           onClick={() => setActiveTab("history")}
-          className={`py-2 text-xs sm:text-sm font-semibold rounded-md transition-all ${
+          className={`pb-2 px-3 font-medium transition-colors relative ${
             activeTab === "history"
-              ? "bg-card text-primary shadow-sm"
+              ? "text-primary border-b-2 border-primary font-semibold"
               : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          Delivery History ({completedParcels.length})
+          Completed History ({completedParcels.length})
         </button>
       </div>
 
@@ -224,7 +236,7 @@ export default function DriverDashboardPage() {
             <div className="text-center py-16 text-muted-foreground border rounded-xl bg-card/20 shadow-inner">
               <Package className="h-10 w-10 mx-auto mb-3 opacity-30 text-primary" />
               <p className="text-base font-semibold text-foreground">No active tasks</p>
-              <p className="text-xs mt-1">Enjoy your break! Refresh when ready for new tasks.</p>
+              <p className="text-xs mt-1">All deliveries completed or waiting for assignment.</p>
             </div>
           ) : (
             activeParcels.map((parcel, i) => (
@@ -238,7 +250,15 @@ export default function DriverDashboardPage() {
                   <span className="font-code text-sm text-primary font-semibold">
                     {parcel.tracking_code}
                   </span>
-                  <ParcelStatusBadge status={parcel.status} />
+                  <div className="flex items-center gap-2">
+                    {parcel.cod_amount && parcel.cod_amount > 0 ? (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/20">
+                        <Coins className="h-3 w-3" />
+                        KES {parcel.cod_amount.toLocaleString()} ({parcel.payment_method || "cash"})
+                      </span>
+                    ) : null}
+                    <ParcelStatusBadge status={parcel.status} />
+                  </div>
                 </div>
 
                 {/* Recipient info */}
@@ -314,7 +334,14 @@ export default function DriverDashboardPage() {
                   <span className="font-code text-xs text-primary font-semibold">
                     {parcel.tracking_code}
                   </span>
-                  <ParcelStatusBadge status={parcel.status} />
+                  <div className="flex items-center gap-2">
+                    {parcel.collected_amount && parcel.collected_amount > 0 ? (
+                      <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-success/15 text-success border border-success/20">
+                        Collected KES {parcel.collected_amount.toLocaleString()}
+                      </span>
+                    ) : null}
+                    <ParcelStatusBadge status={parcel.status} />
+                  </div>
                 </div>
                 <div className="text-sm">
                   <p className="font-semibold text-foreground">{parcel.recipient_name}</p>

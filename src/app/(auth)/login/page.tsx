@@ -79,7 +79,7 @@ export default function LoginPage() {
       }
       
       router.refresh();
-    } catch (err) {
+    } catch {
       router.push("/dispatch");
       router.refresh();
     }

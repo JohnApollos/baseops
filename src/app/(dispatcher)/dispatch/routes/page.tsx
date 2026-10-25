@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { MapPin, Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 interface RouteWithRelations {
   id: string;
@@ -63,7 +63,7 @@ export default function RoutesPage() {
           .order("date", { ascending: false });
 
         if (routesErr) throw routesErr;
-        setRoutes((routesData as any) || []);
+        setRoutes((routesData as unknown as RouteWithRelations[]) || []);
 
         // Fetch all parcels in the org to map parcel_ids to tracking_codes
         const { data: parcelsData } = await supabase
@@ -78,14 +78,14 @@ export default function RoutesPage() {
           });
           setParcelsMap(map);
         }
-      } catch (err: any) {
-        toast.error("Error loading routes: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error loading routes: " + (err as Error).message);
       } finally {
         setLoading(false);
       }
     }
     loadRoutesData();
-  }, []);
+  }, [supabase]);
 
   return (
     <div className="space-y-6">

@@ -67,6 +67,8 @@ export const parcelSchema = z.object({
     .min(10, "A valid phone number is required.")
     .max(15),
   weight_kg: z.number().min(0.1, "Weight must be at least 0.1 kg.").max(1000),
+  cod_amount: z.number().min(0, "COD amount cannot be negative.").default(0).optional(),
+  payment_method: z.enum(["cash", "mpesa", "prepaid", "none"]).default("cash").optional(),
   notes: z.string().optional(),
   assigned_driver_id: z.string().uuid().optional(),
   assigned_vehicle_id: z.string().uuid().optional(),
@@ -87,6 +89,9 @@ export type InviteFormData = z.infer<typeof inviteSchema>;
 export const deliveryEventSchema = z.object({
   parcel_id: z.string().uuid(),
   event_type: z.enum(["picked_up", "attempted", "delivered", "failed"]),
+  amount_collected: z.number().min(0).optional(),
+  payment_method: z.enum(["cash", "mpesa", "none"]).optional(),
+  payment_reference: z.string().optional(),
   notes: z.string().optional(),
   coords: z
     .tuple([z.number().min(-90).max(90), z.number().min(-180).max(180)])

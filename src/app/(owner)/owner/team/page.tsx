@@ -44,14 +44,14 @@ export default function TeamManagementPage() {
         const mappedMembers: TeamMember[] = (teamData || []).map((m) => ({
           id: m.id,
           full_name: m.full_name,
-          email: (m as any).email || m.phone || "No contact info",
+          email: ("email" in m ? String((m as Record<string, unknown>).email) : undefined) || m.phone || "No contact info",
           role: m.role,
           onboarded_at: m.onboarded_at,
         }));
 
         setMembers(mappedMembers);
-      } catch (err: any) {
-        toast.error("Error loading team members: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error loading team members: " + (err as Error).message);
       } finally {
         setLoading(false);
       }

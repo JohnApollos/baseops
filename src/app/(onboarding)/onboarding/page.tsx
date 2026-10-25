@@ -94,7 +94,7 @@ export default function OnboardingPage() {
       return;
     }
 
-    const createdOrgId = (orgResult as any)?.id || orgResult;
+    const createdOrgId = typeof orgResult === "object" && orgResult !== null && "id" in orgResult ? String((orgResult as { id: unknown }).id) : String(orgResult);
     setOrgId(createdOrgId);
     setIsLoading(false);
     setStep(2);

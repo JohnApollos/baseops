@@ -22,6 +22,16 @@ export type ParcelStatus =
   | "failed"
   | "returned";
 
+/** Payment collection method for Cash-on-Delivery. */
+export type PaymentMethod = "cash" | "mpesa" | "prepaid" | "none";
+
+/** End-of-day financial reconciliation status. */
+export type ReconciliationStatus =
+  | "pending"
+  | "reconciled"
+  | "disputed"
+  | "waived";
+
 /** Current state of a vehicle in the fleet. */
 export type VehicleStatus = "available" | "on_route" | "maintenance";
 
@@ -93,6 +103,10 @@ export interface Parcel {
   assigned_driver_id: string | null;
   assigned_vehicle_id: string | null;
   notes: string | null;
+  cod_amount?: number;
+  collected_amount?: number;
+  payment_method?: PaymentMethod;
+  reconciliation_status?: ReconciliationStatus;
   created_at: string;
   delivered_at: string | null;
   updated_at?: string;
@@ -122,6 +136,11 @@ export interface DeliveryEvent {
   event_type: DeliveryEventType;
   notes: string | null;
   coords: [number, number] | null;
+  amount_collected?: number;
+  payment_method?: PaymentMethod;
+  payment_reference?: string | null;
+  is_collision?: boolean;
+  collision_reason?: string | null;
   created_at: string;
 }
 

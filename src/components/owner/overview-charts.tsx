@@ -1,23 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
-  Area,
   AreaChart,
-  Bar,
-  BarChart,
-  Cell,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
+  Area,
   XAxis,
   YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
 } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 
-// Baseline fallback trends when no operational records exist
+const emptySubscribe = () => () => {};
+function useMounted() {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
+}
+
 const defaultVolumeData = [
   { date: "Mon", parcels: 0 },
   { date: "Tue", parcels: 0 },
@@ -36,15 +44,14 @@ const defaultStatusData = [
 ];
 
 const defaultFleetData = [
-  { name: "No Active Vehicles", deliveries: 0 },
+  { name: "No vehicles", deliveries: 0 },
 ];
 
 export function DeliveryVolumeChart() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [data, setData] = useState(defaultVolumeData);
 
   useEffect(() => {
-    setMounted(true);
     async function loadVolume() {
       try {
         const supabase = createClient();
@@ -133,11 +140,10 @@ export function DeliveryVolumeChart() {
 }
 
 export function StatusDistributionPie() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [data, setData] = useState(defaultStatusData);
 
   useEffect(() => {
-    setMounted(true);
     async function loadStatuses() {
       try {
         const supabase = createClient();
@@ -235,11 +241,10 @@ export function StatusDistributionPie() {
 }
 
 export function FleetPerformanceBar() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [data, setData] = useState(defaultFleetData);
 
   useEffect(() => {
-    setMounted(true);
     async function loadFleetPerformance() {
       try {
         const supabase = createClient();

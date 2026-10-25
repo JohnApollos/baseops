@@ -13,8 +13,8 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Shield, Building2, Users, Package, Wallet, Loader2, ArrowUpRight } from "lucide-react";
-import type { Organization } from "@/types";
+import { Shield, Building2, Users, Package, Wallet, Loader2 } from "lucide-react";
+import type { Organization, PlanTier } from "@/types";
 
 export default function AdminDashboardPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -28,46 +28,49 @@ export default function AdminDashboardPage() {
 
   const supabase = createClient();
 
-  async function loadAdminData() {
-    try {
-      // 1. Fetch all organizations
-      const { data: orgsData, error: orgsErr } = await supabase
-        .from("organizations")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (orgsErr) throw orgsErr;
-      const orgs = orgsData || [];
-      setOrganizations(orgs);
-
-      // 2. Fetch total users count
-      const { count: usersCount, error: usersErr } = await supabase
-        .from("profiles")
-        .select("*", { count: "exact", head: true });
-
-      // 3. Fetch total parcels count
-      const { count: parcelsCount, error: parcelsErr } = await supabase
-        .from("parcels")
-        .select("*", { count: "exact", head: true });
-
-      setStats({
-        orgsCount: orgs.length,
-        usersCount: usersCount || 0,
-        parcelsCount: parcelsCount || 0,
-      });
-    } catch (err: any) {
-      toast.error("Error loading admin controls: " + err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
-    loadAdminData();
-  }, []);
+    let isMounted = true;
+    async function loadAdminData() {
+      try {
+        const { data: orgsData, error: orgsErr } = await supabase
+          .from("organizations")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-  async function handleTogglePlan(orgId: string, currentPlan: string) {
-    const nextPlan = currentPlan === "pro" ? "free" : "pro";
+        if (orgsErr) throw orgsErr;
+        const orgs = orgsData || [];
+        if (!isMounted) return;
+        setOrganizations(orgs);
+
+        const { count: usersCount } = await supabase
+          .from("profiles")
+          .select("*", { count: "exact", head: true });
+
+        const { count: parcelsCount } = await supabase
+          .from("parcels")
+          .select("*", { count: "exact", head: true });
+
+        if (!isMounted) return;
+        setStats({
+          orgsCount: orgs.length,
+          usersCount: usersCount || 0,
+          parcelsCount: parcelsCount || 0,
+        });
+      } catch (err: unknown) {
+        toast.error("Error loading admin controls: " + (err as Error).message);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadAdminData();
+    return () => {
+      isMounted = false;
+    };
+  }, [supabase]);
+
+  async function handleTogglePlan(orgId: string, currentPlan: PlanTier) {
+    const nextPlan: PlanTier = currentPlan === "pro" ? "free" : "pro";
     setUpdatingId(orgId);
     try {
       const { error } = await supabase
@@ -80,10 +83,10 @@ export default function AdminDashboardPage() {
       
       // Update local state
       setOrganizations((prev) =>
-        prev.map((o) => (o.id === orgId ? { ...o, plan: nextPlan as any } : o))
+        prev.map((o) => (o.id === orgId ? { ...o, plan: nextPlan } : o))
       );
-    } catch (err: any) {
-      toast.error("Plan update failed: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Plan update failed: " + (err as Error).message);
     } finally {
       setUpdatingId(null);
     }
@@ -105,8 +108,8 @@ export default function AdminDashboardPage() {
       setOrganizations((prev) =>
         prev.map((o) => (o.id === orgId ? { ...o, wallet_balance: o.wallet_balance + topUpAmount } : o))
       );
-    } catch (err: any) {
-      toast.error("Top up failed: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Top up failed: " + (err as Error).message);
     } finally {
       setUpdatingId(null);
     }

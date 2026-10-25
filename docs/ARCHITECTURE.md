@@ -2,7 +2,7 @@
 
 BaseOps is a multi-tenant, offline-first Logistics and Fleet Management Progressive Web Application (PWA) built with Next.js 16, Supabase, and PostgreSQL.
 
-This document describes the architectural topology, multi-tenancy model, offline synchronization pipeline, security boundaries, and data flow of the application.
+This document describes the architectural topology, multi-tenancy model, offline synchronization pipeline, financial settlement ledger, security boundaries, and data flow of the application.
 
 ---
 
@@ -15,6 +15,7 @@ graph TD
         DexieDB["Dexie.js (IndexedDB Local Store)"]
         SyncEngine["Offline Sync Engine (FIFO Queue)"]
         LeafletMap["React-Leaflet Dispatch Map"]
+        ManifestImporter["Bulk CSV/Excel Manifest Importer"]
     end
 
     subgraph ServerLayer ["Server Layer (Next.js 16 Runtime)"]
@@ -30,6 +31,7 @@ graph TD
         Functions["SECURITY DEFINER Helper RPCs"]
         Realtime["PostgreSQL CDC (Supabase Realtime)"]
         Catalog["6 Domain Tables (public schema)"]
+        SettlementLedger["Append-Only Delivery Event & Settlement Ledger"]
     end
 
     Browser <--> DexieDB
@@ -62,8 +64,8 @@ sequenceDiagram
     participant PG as PostgreSQL (RLS Engine)
     participant Data as public.parcels
 
-    Driver->>App: Mark Parcel as Delivered
-    App->>PG: UPDATE public.parcels SET status = 'delivered' WHERE id = '...'
+    Driver->>App: Mark Parcel as Delivered & Collect COD
+    App->>PG: UPDATE public.parcels SET status = 'delivered', collected_amount = 1500 WHERE id = '...'
     Note over PG: Evaluate RLS: parcels_driver_isolation
     Note over PG: Check: org_id == get_user_org_id(auth.uid())<br/>AND assigned_driver_id == auth.uid()
     alt Authorized Tenant & Assignee
@@ -83,8 +85,8 @@ BaseOps implements three distinct user roles within each tenant organization, pl
 | Role | Primary Interface | Allowed Capabilities | Restricted Capabilities |
 | :--- | :--- | :--- | :--- |
 | **`owner`** | `/owner/*` & `/dispatch/*` | Full organization governance, billing plan selection, team member invitation (all roles), parcel & fleet management, executive analytics. | Cannot modify own `role` or `org_id` directly via client UPDATE (must use administrative RPCs). |
-| **`dispatcher`** | `/dispatch/*` | Real-time parcel board (Kanban), parcel creation & assignment, fleet registration, route inspection, driver invitation. | Cannot invite owners/dispatchers, cannot alter organization billing or core settings, cannot access `/owner/*`. |
-| **`driver`** | `/driver` | Mobile-first task list, offline parcel status updates (`delivered`, `failed`), offline audit trail creation, local IndexedDB caching. | Cannot view or mutate other drivers' parcels, cannot register vehicles, cannot access dispatch or owner dashboards. |
+| **`dispatcher`** | `/dispatch/*` | Real-time parcel board (Kanban), parcel creation & assignment, bulk manifest ingestion, COD reconciliation, fleet registration, route inspection, driver invitation. | Cannot invite owners/dispatchers, cannot alter organization billing or core settings, cannot access `/owner/*`. |
+| **`driver`** | `/driver` | Mobile-first task list, offline parcel status updates (`delivered`, `failed`), COD collection logging (cash/M-Pesa), offline audit trail creation, local IndexedDB caching. | Cannot view or mutate other drivers' parcels, cannot register vehicles, cannot access dispatch or owner dashboards. |
 | **Super-Admin** | `/admin` | Platform-wide organization directory, subscription tier overrides, tenant wallet credit adjustments. | Access gated strictly by matching `SUPER_ADMIN_EMAIL` environment variable. |
 
 ---
@@ -155,7 +157,38 @@ graph TD
 
 ---
 
-## 6. Directory Structure & Code Organization
+## 6. Financial Settlement & Collision Resolution Engine (INT-01 / ARCH-01)
+
+In emerging markets logistics, network partitions frequently create operational conflicts. The BaseOps synchronization engine treats delivery events as an **immutable financial ledger**, never allowing simple last-write-wins overwrites to erase financial trails.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Dispatcher
+    actor Driver (Offline)
+    participant Sync as Background Sync Engine
+    participant DB as PostgreSQL Ledger
+
+    Note over Dispatcher,DB: 10:00 AM - Customer calls to cancel
+    Dispatcher->>DB: UPDATE parcels SET status = 'cancelled'
+    
+    Note over Driver,Sync: 10:15 AM - Driver arrives offline & delivers parcel
+    Driver->>Sync: Collect KES 2,500 Cash & Log Delivery
+    
+    Note over Sync,DB: 11:30 AM - Driver reconnects to cellular data
+    Sync->>DB: Query current server parcel status
+    DB-->>Sync: Return status: 'cancelled'
+    
+    Note over Sync: Collision Detected! Terminal state conflict.
+    Sync->>DB: INSERT into delivery_events (is_collision: true, amount_collected: 2500, collision_reason: 'Delivered after server cancellation')
+    Sync->>DB: UPDATE parcels SET reconciliation_status = 'disputed', collected_amount = 2500
+    
+    Note over Dispatcher: Dispatcher UI flags Disputed Parcel KPI with collected funds intact.
+```
+
+---
+
+## 7. Directory Structure & Code Organization
 
 ```text
 baseops/
@@ -170,22 +203,27 @@ baseops/
 │   │   ├── (admin)/          # Super-admin platform controls (/admin)
 │   │   ├── (auth)/           # Authentication flows (login, register, forgot-password)
 │   │   ├── (dispatcher)/     # Dispatch center, parcels, fleet, drivers, routes
-│   │   ├── (driver)/         # Mobile-first driver delivery app with offline sync
+│   │   ├── (driver)/         # Mobile-first driver delivery app with offline sync & COD
 │   │   ├── (onboarding)/     # Organization & initial fleet onboarding wizard
 │   │   ├── (owner)/          # Executive dashboard, team management, billing, org settings
 │   │   ├── api/              # Secure API route handlers (auth callbacks, invite-team)
 │   │   ├── globals.css       # Tailwind CSS v4 styling & dark theme variables
 │   │   ├── layout.tsx        # Root HTML shell & ThemeProvider
 │   │   └── page.tsx          # Public product landing page
-│   ├── components/           # Modular React components (dispatch, driver, owner, shared, ui)
+│   ├── components/
+│   │   ├── dispatch/         # Dispatch components (manifest-importer-dialog.tsx, etc.)
+│   │   ├── driver/           # Driver components
+│   │   ├── owner/            # Overview charts & analytics
+│   │   ├── shared/           # Header, sidebar, shell
+│   │   └── ui/               # shadcn/ui primitives
 │   ├── lib/                  # Core utilities, Dexie database, Supabase clients, sync engine
 │   ├── proxy.ts              # Next.js 16 RBAC routing proxy / session middleware
 │   └── types/                # Authoritative TypeScript domain entity interfaces
 ├── supabase/
 │   ├── config.toml           # Local Supabase CLI configuration
 │   ├── seed.sql              # Deterministic database seed data
-│   └── migrations/           # Authoritative SQL migration history (00001 -> 00004)
+│   └── migrations/           # SQL migration history (00001 -> 00005)
 ├── tests/
-│   └── security/             # Automated security, RLS, offline storage, and live DB tests
+│   └── security/             # Security, RLS, offline storage, settlement ledger, and live DB tests
 └── docs/                     # Technical, operational, and architectural documentation
 ```

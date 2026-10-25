@@ -118,7 +118,7 @@ GRANT EXECUTE ON FUNCTION public.get_user_role(UUID) TO authenticated, service_r
 
 ---
 
-## 5. Adversarial Security Verification Suite (SEC-01 → SEC-16)
+## 5. Adversarial Security Verification Suite (SEC-01 → SEC-18)
 
 BaseOps tests every attack vector against live PostgreSQL and logic mock test harnesses:
 
@@ -140,10 +140,12 @@ BaseOps tests every attack vector against live PostgreSQL and logic mock test ha
 | **SEC-14** | Audit trail tampering | Owner updates `delivery_events` note | RLS `USING (false)` rejects mutation (0 rows affected) | 🟢 **PASS** |
 | **SEC-15** | Audit trail deletion | Owner deletes `delivery_events` row | RLS `USING (false)` rejects deletion (0 rows affected) | 🟢 **PASS** |
 | **SEC-16** | Unauthenticated team invite abuse | Anonymous caller hits `/api/invite-team` | Server validates session cookies; returns 401 Unauthorized | 🟢 **PASS** |
+| **SEC-17** | Negative financial balance / COD injection | Client submits negative `cod_amount` or `collected_amount` | Blocked by PostgreSQL CHECK constraint `chk_parcels_cod_positive` | 🟢 **PASS** |
+| **SEC-18** | Offline state collision overwrite | Offline delivery logged after server cancellation | Sync engine traps collision, appends audit event with `is_collision: true`, flags dispute | 🟢 **PASS** |
 
 ---
 
 ## 6. Verification Status Distinction
 
-- **🟢 LOCAL VERIFIED**: All 23 live database attack tests and 38 logic tests pass against the local Docker/Supabase PostgreSQL instance (`127.0.0.1:54322`).
+- **🟢 LOCAL VERIFIED**: All 23 live database attack tests and 42 security, settlement, and RLS contract tests pass (65 tests total) against the local Docker/Supabase PostgreSQL instance (`127.0.0.1:54322`).
 - **🟡 CLOUD VERIFIED**: Pending configuration of a live Supabase Cloud project by the organization owner.

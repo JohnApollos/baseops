@@ -20,6 +20,10 @@
 //
 // 4. The engine exposes a reactive `syncState` that UI components
 //    can subscribe to for showing the sync indicator.
+//
+// 5. Collision Resolution: When an offline delivery collides with a
+//    server-side cancellation or reassignment, it logs an immutable
+//    collision audit event and flags the parcel for settlement dispute.
 // ============================================================
 
 import { db, clearLocalDatabase } from "@/lib/db";
@@ -253,6 +257,48 @@ async function executeMutation(supabase: any, item: SyncQueueItem) {
     }
     case "update": {
       const { id, ...updateData } = payload;
+
+      // Event Ledger & Collision Detection (ARCH-01):
+      // If updating a parcel to "delivered", check if the server has transitioned to returned/failed/reassigned
+      if (table_name === "parcels" && updateData.status === "delivered") {
+        const { data: serverParcel } = await supabase
+          .from("parcels")
+          .select("status, assigned_driver_id, org_id")
+          .eq("id", id)
+          .single();
+
+        if (serverParcel && (["returned", "failed"].includes(serverParcel.status) || (serverParcel.assigned_driver_id && serverParcel.assigned_driver_id !== item.user_id))) {
+          console.warn(`[sync-engine] State collision detected for parcel ${id}: server status is ${serverParcel.status}`);
+          
+          // Append immutable collision event to delivery_events
+          const collisionEventId = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" 
+            ? crypto.randomUUID() 
+            : undefined;
+
+          await supabase.from("delivery_events").insert({
+            id: collisionEventId,
+            parcel_id: id,
+            org_id: item.org_id || serverParcel.org_id,
+            driver_id: item.user_id,
+            event_type: "delivered",
+            notes: `Settlement Exception: Delivered offline after server transitioned to '${serverParcel.status}'`,
+            is_collision: true,
+            collision_reason: `Server status was '${serverParcel.status}'`,
+            amount_collected: Number(updateData.collected_amount || updateData.cod_amount || 0),
+            payment_method: updateData.payment_method || "cash",
+            coords: [-1.2921, 36.8219],
+          });
+
+          // Flag parcel as disputed in the financial settlement ledger
+          await supabase.from("parcels").update({
+            reconciliation_status: "disputed",
+            notes: `COLLISION: Delivered offline while server was '${serverParcel.status}'`,
+          }).eq("id", id);
+
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from(table_name)
         .update(updateData)
@@ -306,7 +352,7 @@ export async function pullAssignedParcels(userId: string) {
   }
 
   // Remove local parcels that no longer exist on server and have no pending mutations
-  const remoteIdSet = new Set(remoteParcels.map((p: any) => p.id));
+  const remoteIdSet = new Set(remoteParcels.map((p: { id: string }) => p.id));
   const localParcels = await db.parcels.toArray();
 
   for (const local of localParcels) {

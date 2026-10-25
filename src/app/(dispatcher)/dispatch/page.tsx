@@ -16,7 +16,7 @@ function getJitteredCoords(id: string, index: number): [number, number] {
   const baseLng = 36.8219;
   
   // Simple hashing of the UUID to get unique offsets
-  const hash = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const hash = id.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0) + index;
   const latOffset = ((hash % 15) - 7.5) * 0.004;
   const lngOffset = (((hash * 17) % 15) - 7.5) * 0.004;
   
@@ -85,7 +85,7 @@ export default function DispatchDashboardPage() {
       });
 
       setDrivers(driverPins);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Dashboard reload error:", err);
     }
   }, [supabase]);
@@ -111,8 +111,8 @@ export default function DispatchDashboardPage() {
 
         setOrgId(profile.org_id);
         await loadDashboardData(profile.org_id);
-      } catch (err: any) {
-        toast.error("Error initializing dashboard: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Error initializing dashboard: " + (err as Error).message);
       } finally {
         setLoading(false);
       }

@@ -1,24 +1,26 @@
-# BaseOps — Multi-Tenant Logistics & Fleet Management SaaS
+# BaseOps — Offline-First Logistics & Settlement Platform
 
 [![Next.js](https://img.shields.io/badge/Next.js-16.2-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-336791?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Auth%20%26%20RLS-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
-[![Tests](https://img.shields.io/badge/Tests-61%20Passed-success?style=flat-square)](file:///c:/dev/Multi-tenancy/baseops/tests)
+[![Tests](https://img.shields.io/badge/Tests-65%20Passed-success?style=flat-square)](tests)
 
-**BaseOps** is a production-grade multi-tenant logistics, fleet management, and last-mile delivery Progressive Web Application (PWA). Built on Next.js 16, Supabase, and PostgreSQL, it provides database-level Row Level Security (RLS), real-time dispatcher telemetry, and an offline-first mutation engine for drivers operating in cellular dead zones.
+**BaseOps** is a production-grade multi-tenant logistics, fleet management, and offline-first last-mile delivery operations platform. Engineered for emerging markets (beginning with Kenya and East Africa), BaseOps bridges the gap between field execution and financial accountability with an append-only settlement ledger, offline mobile driver PWA, automated Cash-on-Delivery (COD) reconciliation, and bulk manifest ingestion.
 
 ---
 
 ## Key Capabilities
 
-- **🏢 Multi-Tenant Isolation**: Shared database architecture with hard row-level isolation via `org_id`, PostgreSQL RLS policies, and immutable tenant protection triggers.
-- **📡 Offline-First Driver PWA**: Drivers update parcel statuses offline without network latency. Mutations buffer locally inside IndexedDB via Dexie.js and auto-flush in FIFO order upon reconnection.
-- **🗺️ Real-Time Dispatch Center**: Live parcel Kanban board and interactive Leaflet map projecting driver locations via Supabase Realtime (PostgreSQL CDC).
-- **🔒 Enterprise Security**: `PL/pgSQL SECURITY DEFINER` functions with explicit `search_path = public, pg_temp` hardening, revoked internal RPC privileges, and permanent audit log immutability.
-- **📊 Executive Analytics**: Multi-metric delivery volume, fleet performance, and parcel status charts connected directly to database queries with zero-state fallbacks.
-- **✉️ Team Onboarding**: Secure invitation workflow generating magic links via Resend API and pre-configured role templates.
+- 🏢 **Multi-Tenant Isolation**: Shared database architecture with hard row-level isolation via `org_id`, PostgreSQL RLS policies, and immutable tenant protection triggers.
+- 💰 **COD & Settlement Ledger**: End-to-end Cash-on-Delivery tracking with automated driver reconciliation, variance calculation, and cash vs. mobile money (M-Pesa) split auditing.
+- 📡 **Offline-First Driver PWA**: Drivers view assigned stops and log deliveries in complete cellular dead zones. Local mutations buffer inside Dexie.js (IndexedDB) and auto-replay upon reconnection.
+- 🛡️ **Collision-Resistant Event Sourcing**: When an offline delivery occurs on a parcel cancelled remotely, the sync engine preserves the financial audit trail, flags an operational collision, and sets reconciliation status to `disputed`.
+- 📋 **Bulk Manifest Importer**: Dispatchers upload morning Excel/CSV manifests with automated column mapping, format validation, and batch parcel generation.
+- 🗺️ **Real-Time Dispatch Center**: Live parcel Kanban board and interactive Leaflet map projecting driver locations via Supabase Realtime (PostgreSQL CDC).
+- 🔒 **Enterprise Security**: `PL/pgSQL SECURITY DEFINER` functions with explicit `search_path = public, pg_temp`, revoked internal RPC privileges, and permanent delivery event immutability.
+- 📊 **Executive Analytics**: Multi-metric delivery volume, fleet performance, and parcel status charts built with zero-state fallbacks.
 
 ---
 
@@ -79,7 +81,7 @@ Open [http://localhost:3000](http://localhost:3000) to view the application.
 
 ## Pre-Configured Test Accounts
 
-The local database seed includes four pre-configured accounts in the `QuickShip Logistics` organization:
+The local database seed includes pre-configured accounts in the `QuickShip Logistics` organization:
 
 | Role | Email | Password | Direct Dashboard URL |
 | :--- | :--- | :--- | :--- |
@@ -112,26 +114,29 @@ To inspect the local PostgreSQL database using DBeaver:
 - **Password**: `postgres`
 - **SSL**: Disabled
 
-*For detailed instructions including Supabase Cloud connection parameters, see [`docs/DBeaver.md`](file:///c:/dev/Multi-tenancy/baseops/docs/DBeaver.md).*
+*For detailed instructions including Supabase Cloud connection parameters, see [docs/DBeaver.md](docs/DBeaver.md).*
 
 ---
 
 ## Automated Verification & Testing
 
-BaseOps includes an automated test suite comprising 38 unit/contract tests and 23 live database adversarial attack tests (61 total):
+BaseOps includes an automated test harness covering security invariants, offline session isolation, RLS boundaries, and the COD settlement engine:
 
 ```bash
-# Run all unit and security logic tests (38 tests)
+# Run all unit, security logic, and settlement engine tests (42 tests)
 npm test
 
 # Run live PostgreSQL adversarial penetration tests (23 tests)
 npm run test:live
 
-# Run complete test suite (61 tests)
+# Run complete test suite (65 tests)
 npm run test:all
 
 # Type-check TypeScript
 npx tsc --noEmit
+
+# Run ESLint
+npm run lint
 
 # Execute Next.js 16 production build
 npm run build
@@ -141,25 +146,25 @@ npm run build
 
 ## Technical Documentation Master Index
 
-Comprehensive documentation is available in the [`docs/`](file:///c:/dev/Multi-tenancy/baseops/docs) directory:
+Comprehensive documentation is maintained in the [`docs/`](docs/) directory:
 
-- [**Architecture Specification**](file:///c:/dev/Multi-tenancy/baseops/docs/ARCHITECTURE.md): System topology, multi-tenancy model, and offline sync pipeline.
-- [**Database Specification**](file:///c:/dev/Multi-tenancy/baseops/docs/DATABASE.md): ER diagram, schema data dictionary, check constraints, and indexing matrix.
-- [**Security Engineering**](file:///c:/dev/Multi-tenancy/baseops/docs/SECURITY.md): RLS policy matrix, security triggers, search_path hardening, and SEC-01 $\rightarrow$ SEC-16 verification results.
-- [**Authentication & RBAC**](file:///c:/dev/Multi-tenancy/baseops/docs/AUTHENTICATION.md): Session lifecycle, token cookie management, and role routing rules.
-- [**Development Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DEVELOPMENT.md): Step-by-step local setup, environment configuration, and test account credentials.
-- [**Testing & Verification**](file:///c:/dev/Multi-tenancy/baseops/docs/TESTING.md): Test suite architecture, live DB harnesses, and test execution procedures.
-- [**Deployment Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DEPLOYMENT.md): Step-by-step Supabase Cloud migration and Vercel hosting setup.
-- [**Environment Configuration**](file:///c:/dev/Multi-tenancy/baseops/docs/ENVIRONMENT.md): Client-safe vs. server-only secret classification and variable matrix.
-- [**DBeaver Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/DBeaver.md): Local and Cloud GUI database connection instructions.
-- [**Troubleshooting Guide**](file:///c:/dev/Multi-tenancy/baseops/docs/TROUBLESHOOTING.md): Known issues, root causes, and verified solutions.
-- [**API Reference**](file:///c:/dev/Multi-tenancy/baseops/docs/API.md): HTTP route handlers and database RPC specifications.
-- [**Contributing Standards**](file:///c:/dev/Multi-tenancy/baseops/docs/CONTRIBUTING.md): Code conventions, security commandments, and PR checklists.
-- [**Changelog**](file:///c:/dev/Multi-tenancy/baseops/docs/CHANGELOG.md): Detailed version history and architectural evolution.
-- [**Production Readiness Audit**](file:///c:/dev/Multi-tenancy/baseops/docs/PRODUCTION_READINESS.md): 12-domain production readiness checklist and audit verdict.
+- [**Architecture Specification**](docs/ARCHITECTURE.md): System topology, multi-tenancy model, offline sync pipeline, and collision engine.
+- [**Database Specification**](docs/DATABASE.md): ER diagram, schema data dictionary, check constraints, migrations, and indexing matrix.
+- [**Security Engineering**](docs/SECURITY.md): RLS policy matrix, security triggers, search_path hardening, and SEC-01 $\rightarrow$ SEC-16 verification results.
+- [**Authentication & RBAC**](docs/AUTHENTICATION.md): Session lifecycle, token cookie management, and role routing rules.
+- [**Development Guide**](docs/DEVELOPMENT.md): Step-by-step local setup, environment configuration, and test account credentials.
+- [**Testing & Verification**](docs/TESTING.md): Test suite architecture, live DB harnesses, and test execution procedures.
+- [**Deployment Guide**](docs/DEPLOYMENT.md): Step-by-step Supabase Cloud migration and Vercel hosting setup.
+- [**Environment Configuration**](docs/ENVIRONMENT.md): Client-safe vs. server-only secret classification and variable matrix.
+- [**DBeaver Guide**](docs/DBeaver.md): Local and Cloud GUI database connection instructions.
+- [**Troubleshooting Guide**](docs/TROUBLESHOOTING.md): Known issues, root causes, and verified solutions.
+- [**API Reference**](docs/API.md): HTTP route handlers and database RPC specifications.
+- [**Contributing Standards**](docs/CONTRIBUTING.md): Code conventions, security commandments, and PR checklists.
+- [**Changelog**](docs/CHANGELOG.md): Detailed version history and architectural evolution.
+- [**Production Readiness Audit**](docs/PRODUCTION_READINESS.md): 12-domain production readiness checklist and audit verdict.
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](file:///c:/dev/Multi-tenancy/baseops/LICENSE).
+This project is licensed under the [MIT License](LICENSE).

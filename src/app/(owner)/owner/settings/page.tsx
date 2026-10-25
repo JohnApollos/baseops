@@ -36,14 +36,14 @@ export default function OwnerSettingsPage() {
         setProfile(profileData);
         setFullName(profileData.full_name || "");
         setPhone(profileData.phone || "");
-      } catch (err: any) {
-        toast.error("Failed to load profile settings: " + err.message);
+      } catch (err: unknown) {
+        toast.error("Failed to load profile settings: " + (err as Error).message);
       } finally {
         setLoading(false);
       }
     }
     loadProfile();
-  }, []);
+  }, [supabase]);
 
   async function handleUpdateProfile(e: React.FormEvent) {
     e.preventDefault();
@@ -62,8 +62,8 @@ export default function OwnerSettingsPage() {
       if (error) throw error;
 
       toast.success("Profile settings updated successfully!");
-    } catch (err: any) {
-      toast.error("Failed to update profile: " + err.message);
+    } catch (err: unknown) {
+      toast.error("Failed to update profile: " + (err as Error).message);
     } finally {
       setSubmitting(false);
     }
